@@ -28,16 +28,30 @@ class StatsCollector:
         ]
         n = len(turnaround_times)
         mean_tat = sum(turnaround_times) / n if n else 0.0
+
+        positive_completed = [s for s in self.completed_samples if s.is_culture_positive]
+        organism_counts: dict[str, int] = {}
+        for sample in positive_completed:
+            if sample.organism is not None:
+                organism_counts[sample.organism.name] = (
+                    organism_counts.get(sample.organism.name, 0) + 1
+                )
+
         return {
             "samples_completed": n,
             "samples_rejected": len(self.rejected_samples),
+            "samples_positive": len(positive_completed),
             "mean_turnaround_minutes": mean_tat,
             "max_turnaround_minutes": max(turnaround_times) if n else 0.0,
             "min_turnaround_minutes": min(turnaround_times) if n else 0.0,
+            "organism_counts": organism_counts,
         }
 
     def print_report(self) -> None:
         summary = self.summary()
         print("=== Simulation Report ===")
         for key, value in summary.items():
-            print(f"{key}: {value:.2f}" if isinstance(value, float) else f"{key}: {value}")
+            if isinstance(value, float):
+                print(f"{key}: {value:.2f}")
+            else:
+                print(f"{key}: {value}")

@@ -1,0 +1,26 @@
+
+The simulation runs in the context of an NHS clinical microbiology laboratory
+
+Staffing:
+There are three groups of staff:
+    Healthcare science support workers (HSSW): These fulfill the role of technicians in receiving and booking in samples,
+    plating, and setting up susceptibility testing
+    Biomedical Scientists (BMS): Read initial plate results, read susceptibilities and input results onto the laboratory information system
+    Clinical Microbiologists: Doctors who verify the laboratory results on the computer system
+
+Samples:
+    Samples arrive in the laboratory from the community and the hospital.
+    There are a number of specimen types with different inter-arrival means. These will eventually be inferred from testing data
+    Different sample types have a different probability distribution of being positive, with different organisms
+    Each sample will come from a patient. For now each sample will come from a unique patient
+    Blood culture and tissue samples arrive as individual samples, urine, swabs, stool, and sputum arrive as batches
+
+Capacity:
+    Blood culture bottles incubate separately from other samples; the lab can incubate up to 2,200 blood culture bottles at once
+    Every other sample is plated by the HSSW; the lab can store up to 5,000 plates in incubation at once
+    For now, model each sample as generating one plate. This will need to change, as samples can generate multiple plates
+
+ Patients:
+    Samples are generated from patients
+    Patient have an age and gender characteristic will influence sample positivity rate and the organism identified
+    In time further metadata will influence sample characteristics

@@ -41,19 +41,31 @@ def _poisson_pmf(k: int, lam: float) -> float:
     return math.exp(-lam) * lam**k / math.factorial(k)
 
 
+def _expected_arrivals_per_bucket(
+    config: SimulationConfig, sample_type: SampleType, bucket_minutes: float
+) -> float:
+    """Expected sample count per bucket for one sample type, given its own
+    interarrival mean (SampleTypeProfile). For a batched type this multiplies
+    in the mean batch size - only approximate, since the true per-bucket
+    count is a compound Poisson-of-batches distribution, not a pure Poisson
+    one, but close enough to anchor the diagnostic plot."""
+
+    profile = config.sample_type_profiles[sample_type]
+    batch_mean = (sum(config.batch_size_range) / 2) if profile.batched else 1.0
+    return (bucket_minutes / profile.mean_interarrival_minutes) * batch_mean
+
+
 def _plot_arrival_counts(
     ax,
     stats: StatsCollector,
     config: SimulationConfig,
     bucket_minutes: float,
     sample_type: SampleType,
-    n_types: int,
     bins: np.ndarray,
     show_legend: bool,
 ) -> None:
-    """Bucketed arrival counts for one sample type vs. the Poisson distribution
-    implied by thinning the overall exponential interarrival process by that
-    type's arrival probability."""
+    """Bucketed arrival counts for one sample type vs. the Poisson
+    distribution implied by that type's own interarrival mean."""
 
     n_buckets = max(1, math.ceil(config.sim_duration_minutes / bucket_minutes))
     counts = np.zeros(n_buckets, dtype=int)
@@ -63,7 +75,7 @@ def _plot_arrival_counts(
         idx = min(int(sample.arrival_time // bucket_minutes), n_buckets - 1)
         counts[idx] += 1
 
-    lam = (bucket_minutes / config.mean_interarrival_minutes) / n_types
+    lam = _expected_arrivals_per_bucket(config, sample_type, bucket_minutes)
 
     ax.hist(
         counts,
@@ -191,9 +203,11 @@ def plot_distribution_checks(
                 idx = min(int(sample.arrival_time // bucket_minutes), n_buckets - 1)
                 counts[idx] += 1
         counts_by_type[sample_type] = counts
-    lam_overall = (bucket_minutes / config.mean_interarrival_minutes) / n_types
+    max_lam = max(
+        _expected_arrivals_per_bucket(config, st, bucket_minutes) for st in sample_types
+    )
     max_count = max(
-        [int(c.max()) for c in counts_by_type.values() if len(c)] + [math.ceil(lam_overall * 3)]
+        [int(c.max()) for c in counts_by_type.values() if len(c)] + [math.ceil(max_lam * 3)]
     )
     count_bins = np.arange(0, max_count + 2) - 0.5
 
@@ -216,7 +230,7 @@ def plot_distribution_checks(
     for col, sample_type in enumerate(sample_types):
         ax_top, ax_bottom = axes[0, col], axes[1, col]
         _plot_arrival_counts(
-            ax_top, stats, config, bucket_minutes, sample_type, n_types, count_bins, col == 0
+            ax_top, stats, config, bucket_minutes, sample_type, count_bins, col == 0
         )
         _plot_turnaround_times(ax_bottom, stats, sample_type, turnaround_bins)
         _style_axes(ax_top)
