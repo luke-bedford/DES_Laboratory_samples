@@ -1,4 +1,4 @@
-from lab_sim import SimulationConfig, plot_distribution_checks, run_simulation
+from lab_sim import SimulationConfig, plot_distribution_checks, render_html_report, run_simulation
 
 
 def main() -> None:
@@ -8,6 +8,9 @@ def main() -> None:
 
     output_path = plot_distribution_checks(stats, config)
     print(f"Distribution checks saved to {output_path}")
+
+    report_path = render_html_report(stats, config)
+    print(f"Summary report saved to {report_path}")
 
 
 if __name__ == "__main__":

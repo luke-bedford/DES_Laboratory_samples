@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab simulation summary</title>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #fcfcfb;
+    color: #0b0b0b;
+    margin: 0;
+    padding: 32px 24px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .subtitle { color: #52514e; margin-bottom: 24px; }
+  .run-meta {
+    display: flex; flex-wrap: wrap; gap: 24px;
+    margin-bottom: 32px; padding: 16px 20px;
+    background: #fff; border: 1px solid #e1e0d9; border-radius: 8px;
+  }
+  .run-meta div { min-width: 140px; }
+  .run-meta .label { color: #898781; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .run-meta .value { font-size: 1.15rem; font-weight: 600; }
+  h2 { font-size: 1.05rem; margin: 32px 0 10px; color: #0b0b0b; }
+  table {
+    width: 100%; border-collapse: collapse; background: #fff;
+    border: 1px solid #e1e0d9; border-radius: 8px; overflow: hidden;
+    font-size: 0.88rem;
+  }
+  th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid #e1e0d9; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: #52514e; font-weight: 600; background: #f5f4f1; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #f9f8f5; }
+  .table-scroll { overflow-x: auto; }
+  footer { margin-top: 32px; color: #898781; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Lab simulation summary</h1>
+  <div class="subtitle">Generated from a 3.0-day run (seed 42)</div>
+
+  <div class="run-meta">
+    <div><div class="label">Arrived</div><div class="value">568</div></div>
+    <div><div class="label">Completed</div><div class="value">364</div></div>
+    <div><div class="label">Positive</div><div class="value">90</div></div>
+    <div><div class="label">Rejected</div><div class="value">0</div></div>
+    <div><div class="label">Mean turnaround</div><div class="value">22.9 h</div></div>
+  </div>
+
+  <h2>Samples by specimen type</h2>
+  <div class="table-scroll"><table><thead><tr><th>Specimen type</th><th>Arrived</th><th>Completed</th><th>Positive</th><th>Negative</th><th>% positive</th></tr></thead><tbody><tr><td>Blood Culture</td><td>107</td><td>61</td><td>5</td><td>56</td><td>8%</td></tr><tr><td>Tissue</td><td>34</td><td>22</td><td>5</td><td>17</td><td>23%</td></tr><tr><td>Urine</td><td>159</td><td>107</td><td>28</td><td>79</td><td>26%</td></tr><tr><td>Swab</td><td>138</td><td>83</td><td>36</td><td>47</td><td>43%</td></tr><tr><td>Stool</td><td>57</td><td>40</td><td>2</td><td>38</td><td>5%</td></tr><tr><td>Sputum</td><td>73</td><td>51</td><td>14</td><td>37</td><td>27%</td></tr></tbody></table></div>
+
+  <h2>Turnaround time by specimen type</h2>
+  <div class="table-scroll"><table><thead><tr><th>Specimen type</th><th>Completed</th><th>Mean turnaround</th><th>Min turnaround</th><th>Max turnaround</th></tr></thead><tbody><tr><td>Blood Culture</td><td>61</td><td>19.7 h</td><td>14.4 h</td><td>38.2 h</td></tr><tr><td>Tissue</td><td>22</td><td>22.1 h</td><td>16.1 h</td><td>37.7 h</td></tr><tr><td>Urine</td><td>107</td><td>23.4 h</td><td>12.6 h</td><td>40.5 h</td></tr><tr><td>Swab</td><td>83</td><td>26.2 h</td><td>12.8 h</td><td>43.2 h</td></tr><tr><td>Stool</td><td>40</td><td>19.2 h</td><td>14.0 h</td><td>35.9 h</td></tr><tr><td>Sputum</td><td>51</td><td>23.6 h</td><td>15.3 h</td><td>41.4 h</td></tr></tbody></table></div>
+
+  <h2>Average phase duration by specimen type</h2>
+  <p class="subtitle" style="margin-top:-4px;">Susceptibility-related phases only apply to positive samples; a dash means no completed sample of that type reached that phase.</p>
+  <div class="table-scroll"><table><thead><tr><th>Specimen type</th><th>Reception</th><th>Accessioning</th><th>Plating</th><th>Primary incubation</th><th>Reading</th><th>Susceptibility setup</th><th>Sensitivity incubation</th><th>Sensitivity reading</th><th>Result entry</th><th>Verification</th></tr></thead><tbody><tr><td>Blood Culture</td><td>2.8 min</td><td>4.0 min</td><td>5.8 min</td><td>17.7 h</td><td>4.7 min</td><td>17.3 min</td><td>14.4 h</td><td>9.0 min</td><td>4.4 min</td><td>4.4 min</td></tr><tr><td>Tissue</td><td>3.2 min</td><td>3.8 min</td><td>5.6 min</td><td>17.9 h</td><td>5.2 min</td><td>22.8 min</td><td>13.9 h</td><td>8.8 min</td><td>3.9 min</td><td>4.9 min</td></tr><tr><td>Urine</td><td>3.0 min</td><td>4.0 min</td><td>6.0 min</td><td>18.1 h</td><td>5.2 min</td><td>18.1 min</td><td>16.4 h</td><td>6.6 min</td><td>3.9 min</td><td>5.1 min</td></tr><tr><td>Swab</td><td>3.1 min</td><td>3.7 min</td><td>5.9 min</td><td>18.1 h</td><td>5.4 min</td><td>21.2 min</td><td>15.4 h</td><td>8.7 min</td><td>4.1 min</td><td>4.9 min</td></tr><tr><td>Stool</td><td>3.1 min</td><td>4.0 min</td><td>6.0 min</td><td>17.5 h</td><td>4.2 min</td><td>21.1 min</td><td>16.9 h</td><td>5.5 min</td><td>4.0 min</td><td>4.8 min</td></tr><tr><td>Sputum</td><td>2.9 min</td><td>4.0 min</td><td>5.9 min</td><td>18.0 h</td><td>3.9 min</td><td>20.4 min</td><td>16.1 h</td><td>8.4 min</td><td>4.2 min</td><td>4.5 min</td></tr></tbody></table></div>
+
+  <footer>lab_sim.report.render_html_report &middot; 364 completed samples analyzed</footer>
+</div>
+</body>
+</html>

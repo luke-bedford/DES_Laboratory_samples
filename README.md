@@ -119,9 +119,12 @@ by unfinished queueing.
   organism counts.
 - `lab_sim/plotting.py` — renders the arrival-count and turnaround-time diagnostic plots,
   faceted by sample type, to `diagnostics/distribution_checks.png`.
+- `lab_sim/report.py` — renders a standalone HTML summary (arrival counts, turnaround
+  times, and average per-phase durations, each broken down by sample type) to
+  `diagnostics/summary_report.html`.
 - `lab_sim/simulation.py` — wires everything together and runs the simulation clock.
 - `main.py` — entry point that runs a default simulation, prints a report, and writes the
-  diagnostic plot.
+  diagnostic plot and HTML summary.
 
 ## Usage
 
