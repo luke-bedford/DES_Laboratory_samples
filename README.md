@@ -85,27 +85,44 @@ through the process/arrival code. Nothing currently rejects or reneges — there
 capacity ceiling — so a `rejected_samples` bucket exists in `StatsCollector` but is always
 empty at present.
 
-**Emergent behavior at the current defaults** (total arrivals ~240/day across all types):
-sized to the lab's real physical storage (2,200 blood-culture slots, 5,000 plate slots),
-incubation capacity is no longer the binding constraint it was with the original 20-slot
-placeholder pool — roughly two-thirds of samples now complete within the default 3-day
-run, and positive-culture completions (previously zero, regardless of staff/equipment
-model) now show up in every sample type. What still caps completion within the window is
-the ~18-34 hour minimum pipeline latency itself (a sample arriving late in the run has no
-way to finish before `sim_duration_minutes` is reached) plus queueing for the much smaller
-HSSW (5) and BMS (3) pools. `diagnostics/distribution_checks.png` shows this: bucketed
-arrival counts track each sample type's own Poisson (or, for the four batched types,
-compound Poisson-of-batches) shape closely, and the completed-sample turnaround histograms
-now show a real negative/positive split for every sample type instead of being dominated
-by unfinished queueing.
+**Warm-up period** (`lab_sim/stats.py`, `lab_sim/simulation.py`). Starting the clock from an
+empty lab and recording from `t=0` isn't representative of a real snapshot, where queues,
+incubators, and staff are already mid-flow. `run_simulation` therefore runs the clock for
+`config.warmup_minutes + config.sim_duration_minutes` in total (3 days + 3 days by default),
+but samples arriving or completing during the first `warmup_minutes` are simulated exactly
+like any other — they occupy staff and incubator capacity, so the backlog genuinely builds
+up — while being excluded from the numbers everyone actually reads.
+`StatsCollector` records every arrival and completion regardless of when it happened, and
+exposes `observed_arrivals()` / `observed_completions()`, which filter to what happened
+during the observation window (arrivals by `arrival_time`, completions by when they were
+`reported` — the standard "clear statistics at `T_w`" convention). `summary()`,
+`plot_distribution_checks`, and `render_html_report` all read through these two methods
+rather than the raw lists, so nothing needs its own warm-up logic. `stats.summary()` also
+reports `arrivals_during_warmup` / `completions_during_warmup` so the warm-up's effect stays
+visible rather than silently discarded.
+
+**Emergent behavior at the current defaults**: with incubation capacity sized to the lab's
+real physical storage (2,200 blood-culture slots, 5,000 plate slots) and the system already
+warmed up before recording starts, a 3-day warm-up followed by a 3-day observation window
+sees roughly 690 samples arrive and essentially all of them (~99%) complete within the
+window — a stark contrast to a cold start, where the same 3 observed days would show most
+samples still queued (see the git history for that comparison). Positive-culture completions
+(177 of ~680, roughly a quarter) now show up for every sample type in normal proportions.
+What still shapes turnaround is the ~18-34 hour minimum pipeline latency itself, plus
+queueing for the much smaller HSSW (5) and BMS (3) pools — not incubator contention, and no
+longer the cold-start transient. `diagnostics/distribution_checks.png` shows this: bucketed
+arrival counts (bucketed relative to the end of warm-up) track each sample type's own
+Poisson (or, for the four batched types, compound Poisson-of-batches) shape closely, and the
+completed-sample turnaround histograms show a clean negative/positive split for every sample
+type.
 
 ## Structure
 
 - `lab_sim/config.py` — **the parameter file.** Every simulation parameter lives here:
-  arrival rates and batch sizes, patient age/gender distributions, staffing levels, process
-  time distributions, and each sample type's positivity/organism profile
-  (`SampleTypeProfile`). Nothing that controls simulation behavior should be hardcoded
-  anywhere else.
+  the warm-up and observation window lengths, arrival rates and batch sizes, patient
+  age/gender distributions, staffing levels, process time distributions, and each sample
+  type's positivity/organism profile (`SampleTypeProfile`). Nothing that controls
+  simulation behavior should be hardcoded anywhere else.
 - `lab_sim/entities.py` — the `Sample` and `Patient` entities and the `SampleType`,
   `Priority`, `Gender`, `Organism` enums.
 - `lab_sim/resources.py` — shared SimPy resources (HSSW, BMS, clinical microbiologists,
@@ -115,14 +132,18 @@ by unfinished queueing.
   for batched types.
 - `lab_sim/processes.py` — the sample's journey through each lab stage, including
   positivity and organism resolution.
-- `lab_sim/stats.py` — collects per-sample timestamps and reports turnaround times and
-  organism counts.
+- `lab_sim/stats.py` — collects every sample's timestamps (warm-up included) and exposes
+  `observed_arrivals()`/`observed_completions()`, which filter to the post-warm-up
+  observation window; `summary()` reports turnaround times and organism counts from those.
 - `lab_sim/plotting.py` — renders the arrival-count and turnaround-time diagnostic plots,
   faceted by sample type, to `diagnostics/distribution_checks.png`.
-- `lab_sim/report.py` — renders a standalone HTML summary (arrival counts, turnaround
-  times, and average per-phase durations, each broken down by sample type) to
-  `diagnostics/summary_report.html`.
-- `lab_sim/simulation.py` — wires everything together and runs the simulation clock.
+- `lab_sim/report.py` — renders a standalone HTML summary to `diagnostics/summary_report.html`:
+  arrival/completion counts and turnaround times and average per-phase durations by sample
+  type, turnaround time and average per-phase durations compared between culture-positive
+  and culture-negative samples, and patient demographics (gender split, age summary, and
+  age bands against the positivity-modifier thresholds).
+- `lab_sim/simulation.py` — wires everything together and runs the simulation clock for
+  `warmup_minutes + sim_duration_minutes`.
 - `main.py` — entry point that runs a default simulation, prints a report, and writes the
   diagnostic plot and HTML summary.
 

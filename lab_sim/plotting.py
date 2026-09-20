@@ -69,10 +69,15 @@ def _plot_arrival_counts(
 
     n_buckets = max(1, math.ceil(config.sim_duration_minutes / bucket_minutes))
     counts = np.zeros(n_buckets, dtype=int)
-    for sample in stats.arrivals:
+    for sample in stats.observed_arrivals():
         if sample.sample_type is not sample_type:
             continue
-        idx = min(int(sample.arrival_time // bucket_minutes), n_buckets - 1)
+        # Bucket relative to the end of the warm-up period, since
+        # arrival_time is absolute simulation time.
+        idx = min(
+            int((sample.arrival_time - config.warmup_minutes) // bucket_minutes),
+            n_buckets - 1,
+        )
         counts[idx] += 1
 
     lam = _expected_arrivals_per_bucket(config, sample_type, bucket_minutes)
@@ -116,16 +121,17 @@ def _plot_turnaround_times(
     outcome, since positive cultures pick up an extra identification +
     sensitivity stage that shifts their turnaround distribution."""
 
+    completed = stats.observed_completions()
     negative_hours = [
         s.turnaround_time("reported") / 60.0
-        for s in stats.completed_samples
+        for s in completed
         if s.sample_type is sample_type
         and s.is_culture_positive is False
         and s.turnaround_time("reported") is not None
     ]
     positive_hours = [
         s.turnaround_time("reported") / 60.0
-        for s in stats.completed_samples
+        for s in completed
         if s.sample_type is sample_type
         and s.is_culture_positive is True
         and s.turnaround_time("reported") is not None
@@ -195,12 +201,16 @@ def plot_distribution_checks(
     n_types = len(sample_types)
 
     n_buckets = max(1, math.ceil(config.sim_duration_minutes / bucket_minutes))
+    observed_arrivals = stats.observed_arrivals()
     counts_by_type = {}
     for sample_type in sample_types:
         counts = np.zeros(n_buckets, dtype=int)
-        for sample in stats.arrivals:
+        for sample in observed_arrivals:
             if sample.sample_type is sample_type:
-                idx = min(int(sample.arrival_time // bucket_minutes), n_buckets - 1)
+                idx = min(
+                    int((sample.arrival_time - config.warmup_minutes) // bucket_minutes),
+                    n_buckets - 1,
+                )
                 counts[idx] += 1
         counts_by_type[sample_type] = counts
     max_lam = max(
@@ -213,7 +223,7 @@ def plot_distribution_checks(
 
     all_hours = [
         t / 60.0
-        for s in stats.completed_samples
+        for s in stats.observed_completions()
         if (t := s.turnaround_time("reported")) is not None
     ]
     if all_hours:

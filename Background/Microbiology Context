@@ -24,3 +24,7 @@ Capacity:
     Samples are generated from patients
     Patient have an age and gender characteristic will influence sample positivity rate and the organism identified
     In time further metadata will influence sample characteristics
+
+Workflow:
+    Samples arrive in the laboratory reception as above and are booked into the system when HCCW are availably.
+    

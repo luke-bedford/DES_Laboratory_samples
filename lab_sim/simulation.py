@@ -13,9 +13,9 @@ def run_simulation(config: SimulationConfig) -> StatsCollector:
 
     env = simpy.Environment()
     resources = LabResources(env, config)
-    stats = StatsCollector()
+    stats = StatsCollector(warmup_minutes=config.warmup_minutes)
 
     start_arrivals(env, config, resources, stats)
-    env.run(until=config.sim_duration_minutes)
+    env.run(until=config.warmup_minutes + config.sim_duration_minutes)
 
     return stats

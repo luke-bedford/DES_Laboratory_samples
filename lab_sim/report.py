@@ -1,8 +1,8 @@
 import os
-from statistics import mean
+from statistics import mean, median
 
 from .config import SimulationConfig
-from .entities import Sample, SampleType
+from .entities import Gender, Sample, SampleType
 from .stats import StatsCollector
 
 # (display label, timestamp key marking the phase's start, timestamp key
@@ -59,11 +59,13 @@ def build_summary(stats: StatsCollector, config: SimulationConfig) -> dict:
     by sample type from a finished run's StatsCollector."""
 
     sample_types = list(config.sample_type_profiles)
+    observed_arrivals = stats.observed_arrivals()
+    observed_completions = stats.observed_completions()
 
     counts = {}
     for sample_type in sample_types:
-        arrived = sum(1 for s in stats.arrivals if s.sample_type is sample_type)
-        completed = [s for s in stats.completed_samples if s.sample_type is sample_type]
+        arrived = sum(1 for s in observed_arrivals if s.sample_type is sample_type)
+        completed = [s for s in observed_completions if s.sample_type is sample_type]
         positive = sum(1 for s in completed if s.is_culture_positive)
         counts[sample_type] = {
             "arrived": arrived,
@@ -76,7 +78,7 @@ def build_summary(stats: StatsCollector, config: SimulationConfig) -> dict:
     for sample_type in sample_types:
         hours = [
             t / 60.0
-            for s in stats.completed_samples
+            for s in observed_completions
             if s.sample_type is sample_type and (t := s.turnaround_time("reported")) is not None
         ]
         turnaround[sample_type] = {
@@ -86,9 +88,47 @@ def build_summary(stats: StatsCollector, config: SimulationConfig) -> dict:
             "max_hours": max(hours) if hours else None,
         }
 
+    turnaround_by_positivity = {}
+    for is_positive in (True, False):
+        hours = [
+            t / 60.0
+            for s in observed_completions
+            if s.is_culture_positive is is_positive
+            and (t := s.turnaround_time("reported")) is not None
+        ]
+        turnaround_by_positivity[is_positive] = {
+            "n": len(hours),
+            "mean_hours": mean(hours) if hours else None,
+            "median_hours": median(hours) if hours else None,
+            "min_hours": min(hours) if hours else None,
+            "max_hours": max(hours) if hours else None,
+        }
+
+    # One patient per sample (see Background/Microbiology Context), so
+    # demographics are read off the observed arrivals' patients directly.
+    patients = [s.patient for s in observed_arrivals]
+    ages = [p.age for p in patients]
+    n_patients = len(patients)
+    age_bands = {
+        "young": sum(1 for a in ages if a <= config.young_age_threshold),
+        "elderly": sum(1 for a in ages if a >= config.elderly_age_threshold),
+    }
+    age_bands["adult"] = n_patients - age_bands["young"] - age_bands["elderly"]
+    demographics = {
+        "n": n_patients,
+        "gender_counts": {
+            gender: sum(1 for p in patients if p.gender is gender) for gender in Gender
+        },
+        "age_mean": mean(ages) if ages else None,
+        "age_median": median(ages) if ages else None,
+        "age_min": min(ages) if ages else None,
+        "age_max": max(ages) if ages else None,
+        "age_bands": age_bands,
+    }
+
     phase_durations = {}
     for sample_type in sample_types:
-        completed = [s for s in stats.completed_samples if s.sample_type is sample_type]
+        completed = [s for s in observed_completions if s.sample_type is sample_type]
         per_phase = {}
         for label, start_key, end_key in _PHASES:
             values = [
@@ -99,11 +139,30 @@ def build_summary(stats: StatsCollector, config: SimulationConfig) -> dict:
             per_phase[label] = mean(values) if values else None
         phase_durations[sample_type] = per_phase
 
+    phase_durations_by_positivity = {}
+    for is_positive in (True, False):
+        completed = [s for s in observed_completions if s.is_culture_positive is is_positive]
+        per_phase = {}
+        for label, start_key, end_key in _PHASES:
+            values = [
+                d
+                for s in completed
+                if (d := _phase_duration(s, start_key, end_key)) is not None
+            ]
+            per_phase[label] = mean(values) if values else None
+        phase_durations_by_positivity[is_positive] = {
+            "n": len(completed),
+            "phases": per_phase,
+        }
+
     return {
         "sample_types": sample_types,
         "counts": counts,
         "turnaround": turnaround,
+        "turnaround_by_positivity": turnaround_by_positivity,
         "phase_durations": phase_durations,
+        "phase_durations_by_positivity": phase_durations_by_positivity,
+        "demographics": demographics,
     }
 
 
@@ -140,6 +199,23 @@ def _turnaround_table(summary: dict) -> str:
     )
 
 
+def _turnaround_by_positivity_table(summary: dict) -> str:
+    rows = []
+    for is_positive, row_label in ((True, "Culture positive"), (False, "Culture negative")):
+        t = summary["turnaround_by_positivity"][is_positive]
+        rows.append(
+            f"<tr><td>{row_label}</td><td>{t['n']}</td>"
+            f"<td>{_format_hours(t['mean_hours'])}</td><td>{_format_hours(t['median_hours'])}</td>"
+            f"<td>{_format_hours(t['min_hours'])}</td><td>{_format_hours(t['max_hours'])}</td></tr>"
+        )
+    return (
+        "<table><thead><tr><th>Culture result</th><th>Completed</th>"
+        "<th>Mean turnaround</th><th>Median turnaround</th><th>Min turnaround</th>"
+        "<th>Max turnaround</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def _phase_table(summary: dict) -> str:
     phase_labels = [label for label, _, _ in _PHASES]
     header = "".join(f"<th>{label}</th>" for label in phase_labels)
@@ -150,6 +226,74 @@ def _phase_table(summary: dict) -> str:
         rows.append(f"<tr><td>{_type_label(sample_type)}</td>{cells}</tr>")
     return (
         f"<table><thead><tr><th>Specimen type</th>{header}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _phase_by_positivity_table(summary: dict) -> str:
+    phase_labels = [label for label, _, _ in _PHASES]
+    header = "".join(f"<th>{label}</th>" for label in phase_labels)
+    rows = []
+    for is_positive, row_label in ((True, "Culture positive"), (False, "Culture negative")):
+        group = summary["phase_durations_by_positivity"][is_positive]
+        cells = "".join(
+            f"<td>{_format_minutes(group['phases'][label])}</td>" for label in phase_labels
+        )
+        rows.append(f"<tr><td>{row_label} ({group['n']})</td>{cells}</tr>")
+    return (
+        f"<table><thead><tr><th>Culture result</th>{header}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _gender_table(summary: dict) -> str:
+    d = summary["demographics"]
+    rows = []
+    for gender, count in d["gender_counts"].items():
+        pct = f"{100 * count / d['n']:.0f}%" if d["n"] else "—"
+        rows.append(f"<tr><td>{gender.name.title()}</td><td>{count}</td><td>{pct}</td></tr>")
+    return (
+        "<table><thead><tr><th>Gender</th><th>Patients</th><th>%</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _age_summary_table(summary: dict) -> str:
+    d = summary["demographics"]
+
+    def _age(value: float | None) -> str:
+        return "—" if value is None else f"{value:.0f}"
+
+    rows = [
+        f"<tr><td>Mean</td><td>{_age(d['age_mean'])}</td></tr>",
+        f"<tr><td>Median</td><td>{_age(d['age_median'])}</td></tr>",
+        f"<tr><td>Min</td><td>{_age(d['age_min'])}</td></tr>",
+        f"<tr><td>Max</td><td>{_age(d['age_max'])}</td></tr>",
+    ]
+    return (
+        "<table><thead><tr><th>Age</th><th>Years</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _age_band_table(summary: dict, config: SimulationConfig) -> str:
+    d = summary["demographics"]
+    n = d["n"]
+
+    def _pct(count: int) -> str:
+        return f"{100 * count / n:.0f}%" if n else "—"
+
+    bands = [
+        (f"Young (≤ {config.young_age_threshold:.0f})", d["age_bands"]["young"]),
+        ("Adult", d["age_bands"]["adult"]),
+        (f"Elderly (≥ {config.elderly_age_threshold:.0f})", d["age_bands"]["elderly"]),
+    ]
+    rows = [
+        f"<tr><td>{label}</td><td>{count}</td><td>{_pct(count)}</td></tr>"
+        for label, count in bands
+    ]
+    return (
+        "<table><thead><tr><th>Age band</th><th>Patients</th><th>%</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
     )
 
@@ -189,6 +333,9 @@ def render_html_report(
   .run-meta div {{ min-width: 140px; }}
   .run-meta .label {{ color: {_INK_MUTED}; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }}
   .run-meta .value {{ font-size: 1.15rem; font-weight: 600; }}
+  .demo-grid {{ display: flex; flex-wrap: wrap; gap: 24px; }}
+  .demo-grid > div {{ flex: 1; min-width: 220px; }}
+  .demo-grid .label {{ color: {_INK_MUTED}; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }}
   h2 {{ font-size: 1.05rem; margin: 32px 0 10px; color: {_INK_PRIMARY}; }}
   table {{
     width: 100%; border-collapse: collapse; background: #fff;
@@ -207,10 +354,13 @@ def render_html_report(
 <body>
 <div class="wrap">
   <h1>Lab simulation summary</h1>
-  <div class="subtitle">Generated from a {config.sim_duration_minutes / 60 / 24:.1f}-day run (seed {config.random_seed})</div>
+  <div class="subtitle">
+    {config.warmup_minutes / 60 / 24:.1f}-day warm-up (not recorded) followed by a
+    {config.sim_duration_minutes / 60 / 24:.1f}-day observation window (seed {config.random_seed})
+  </div>
 
   <div class="run-meta">
-    <div><div class="label">Arrived</div><div class="value">{len(stats.arrivals)}</div></div>
+    <div><div class="label">Arrived</div><div class="value">{overall['samples_arrived']}</div></div>
     <div><div class="label">Completed</div><div class="value">{overall['samples_completed']}</div></div>
     <div><div class="label">Positive</div><div class="value">{overall['samples_positive']}</div></div>
     <div><div class="label">Rejected</div><div class="value">{overall['samples_rejected']}</div></div>
@@ -218,14 +368,31 @@ def render_html_report(
   </div>
 
   <h2>Samples by specimen type</h2>
+  <p class="subtitle" style="margin-top:-4px;">Arrived and Completed are independent cohorts - a sample can complete in the observation window without having arrived in it (it arrived during warm-up), or vice versa (it's still mid-pipeline at run end).</p>
   <div class="table-scroll">{_counts_table(summary)}</div>
+
+  <h2>Patient demographics</h2>
+  <p class="subtitle" style="margin-top:-4px;">One patient per arrived sample (see Background/Microbiology Context); age bands use the thresholds that modulate positivity (config.young_age_threshold / elderly_age_threshold).</p>
+  <div class="demo-grid">
+    <div><div class="label">By gender</div>{_gender_table(summary)}</div>
+    <div><div class="label">Age summary</div>{_age_summary_table(summary)}</div>
+    <div><div class="label">By age band</div>{_age_band_table(summary, config)}</div>
+  </div>
 
   <h2>Turnaround time by specimen type</h2>
   <div class="table-scroll">{_turnaround_table(summary)}</div>
 
+  <h2>Turnaround time: culture positive vs. culture negative</h2>
+  <p class="subtitle" style="margin-top:-4px;">Median is shown alongside the mean as a check: turnaround is a sum of mostly-Gaussian stage durations, so absent heavy queueing it should be roughly symmetric and the two should track each other. If they diverge noticeably, the mean is being pulled by a skewed tail (e.g. queueing delay) and the median is the more representative figure.</p>
+  <div class="table-scroll">{_turnaround_by_positivity_table(summary)}</div>
+
   <h2>Average phase duration by specimen type</h2>
   <p class="subtitle" style="margin-top:-4px;">Susceptibility-related phases only apply to positive samples; a dash means no completed sample of that type reached that phase.</p>
   <div class="table-scroll">{_phase_table(summary)}</div>
+
+  <h2>Average phase duration: culture positive vs. culture negative</h2>
+  <p class="subtitle" style="margin-top:-4px;">Pooled across all specimen types. Negative samples never reach the susceptibility-related phases, so those are shown as a dash.</p>
+  <div class="table-scroll">{_phase_by_positivity_table(summary)}</div>
 
   <footer>lab_sim.report.render_html_report &middot; {overall['samples_completed']} completed samples analyzed</footer>
 </div>

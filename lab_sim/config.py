@@ -125,8 +125,17 @@ class SimulationConfig:
     """
 
     random_seed: int = 42
-    # Overnight culture incubation alone takes ~18h, so a useful run needs to
-    # span multiple days rather than a single shift for samples to complete.
+    # A simulation starting from an empty lab isn't representative of a real
+    # snapshot, where queues, incubators, and staff are already mid-flow. The
+    # clock runs for this long first - samples arrive and are processed
+    # normally - before StatsCollector starts counting anything as "observed"
+    # (see StatsCollector.observed_arrivals/observed_completions). Total
+    # simulated time is warmup_minutes + sim_duration_minutes.
+    warmup_minutes: float = 3 * 24 * 60
+    # Length of the *observation* window that follows the warm-up - i.e. how
+    # long stats are actually recorded for, not the total run length.
+    # Overnight culture incubation alone takes ~18h, so a useful window needs
+    # to span multiple days rather than a single shift for samples to complete.
     sim_duration_minutes: float = 3 * 24 * 60
 
     # --- Arrivals ---------------------------------------------------------
