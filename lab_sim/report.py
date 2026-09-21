@@ -3,6 +3,7 @@ from statistics import mean, median
 
 from .config import SimulationConfig
 from .entities import Gender, Sample, SampleType
+from .plotting import stage_time_params
 from .stats import StatsCollector
 
 # (display label, timestamp key marking the phase's start, timestamp key
@@ -298,6 +299,21 @@ def _age_band_table(summary: dict, config: SimulationConfig) -> str:
     )
 
 
+def _stage_time_table(config: SimulationConfig) -> str:
+    rows = []
+    for p in stage_time_params(config):
+        clip = f"{p['floor_clip_pct']:.2f}%" if p["floor_clip_pct"] >= 0.005 else "~0%"
+        rows.append(
+            f"<tr><td>{p['label']}</td><td>{_format_minutes(p['mean_minutes'])}</td>"
+            f"<td>{_format_minutes(p['stdev_minutes'])}</td><td>{clip}</td></tr>"
+        )
+    return (
+        "<table><thead><tr><th>Stage</th><th>Mean</th><th>Stdev</th>"
+        "<th>% of draws below the 0.1 min floor</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def render_html_report(
     stats: StatsCollector,
     config: SimulationConfig,
@@ -393,6 +409,11 @@ def render_html_report(
   <h2>Average phase duration: culture positive vs. culture negative</h2>
   <p class="subtitle" style="margin-top:-4px;">Pooled across all specimen types. Negative samples never reach the susceptibility-related phases, so those are shown as a dash.</p>
   <div class="table-scroll">{_phase_by_positivity_table(summary)}</div>
+
+  <h2>Appendix: lab stage service-time parameters</h2>
+  <p class="subtitle" style="margin-top:-4px;">The parameters behind every phase-duration figure above: each stage's duration is drawn independently from a Gaussian (<code>random.gauss(mean, stdev)</code>, floored at 0.1 minutes in <code>processes.py</code>'s <code>_duration</code>), the same for every sample type and culture outcome. Configured in <code>SimulationConfig</code> (<code>config.py</code>).</p>
+  <div class="table-scroll">{_stage_time_table(config)}</div>
+  <img src="stage_time_distributions.png" alt="Lab stage service-time distributions" style="max-width:100%; margin-top:14px; border:1px solid {_GRID}; border-radius: 8px;">
 
   <footer>lab_sim.report.render_html_report &middot; {overall['samples_completed']} completed samples analyzed</footer>
 </div>

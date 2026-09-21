@@ -136,12 +136,18 @@ type.
   `observed_arrivals()`/`observed_completions()`, which filter to the post-warm-up
   observation window; `summary()` reports turnaround times and organism counts from those.
 - `lab_sim/plotting.py` — renders the arrival-count and turnaround-time diagnostic plots,
-  faceted by sample type, to `diagnostics/distribution_checks.png`.
+  faceted by sample type, to `diagnostics/distribution_checks.png`; also renders
+  `diagnostics/stage_time_distributions.png`, one small panel per process stage plotting the
+  Gaussian PDF each stage's duration is actually drawn from (`SimulationConfig`'s `(mean,
+  stdev)` pairs, floored at 0.1 minutes).
 - `lab_sim/report.py` — renders a standalone HTML summary to `diagnostics/summary_report.html`:
   arrival/completion counts and turnaround times and average per-phase durations by sample
   type, turnaround time and average per-phase durations compared between culture-positive
   and culture-negative samples, and patient demographics (gender split, age summary, and
-  age bands against the positivity-modifier thresholds).
+  age bands against the positivity-modifier thresholds); an appendix at the end documents and
+  plots the per-stage service-time parameters behind every phase-duration figure above (the
+  simulation's own assumptions - not fitted to anything, kept separate from `analysis/`'s
+  real-data comparison since the real export has no per-stage timestamps to fit against).
 - `lab_sim/simulation.py` — wires everything together and runs the simulation clock for
   `warmup_minutes + sim_duration_minutes`.
 - `main.py` — entry point that runs a default simulation, prints a report, and writes the
@@ -150,10 +156,15 @@ type.
 ## Real data analysis
 
 `Data/Received_sample_data/Received_sample_data.xlsx` is a real, anonymized export of
-~67k specimen results (specimen type, organism/result, receipt and verification time,
+~67k specimen results (specimen type, organism/result, booking-in and verification time,
 day of week) from an actual microbiology lab. `analysis/` fits the simulation's
 distributional assumptions against it — **as a standalone comparison, not a config
-rewrite**: nothing in `analysis/` writes to `lab_sim/config.py`.
+rewrite**: nothing in `analysis/` writes to `lab_sim/config.py`. Note that the export's
+`anon_received` timestamp is when the sample is **booked in** at reception, not when it
+physically reaches the lab (see `TODO.md`) — so the inter-arrival gaps `analysis/` fits
+against `lab_sim/arrivals.py`'s Poisson assumption are really inter-booking-in gaps,
+staff-paced rather than a clean external process, and turnaround (verified − received)
+excludes whatever wait happens before booking-in.
 
 - `analysis/load_real_data.py` — loads and cleans the raw export: maps 6 of its specimen
   types onto `SampleType` (`Blood`→`BLOOD_CULTURE`, `Tissue`→`TISSUE`, `Urine`→`URINE`,

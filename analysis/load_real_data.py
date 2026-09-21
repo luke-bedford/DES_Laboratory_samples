@@ -4,6 +4,14 @@ See Data/Received_sample_data/Received_sample_data.xlsx. Row-cleaning decisions
 here (interim-result filtering, the "no growth" positivity classifier, the
 Multi-site handling) come from hand-verifying the raw data against the model's
 assumptions - see the plan this analysis was built from for the reasoning.
+
+IMPORTANT: anon_received is the sample's booking-in time (when reception logs
+it on the LIS), not the moment the physical sample reaches the lab - see
+TODO.md. Anything derived from received_days (inter-arrival gaps, the
+day-of-week NHPP review) is really describing the booking-in process, not the
+true external arrival process lab_sim/arrivals.py models; turnaround
+(verified - received) likewise excludes whatever wait happens before
+booking-in.
 """
 
 from __future__ import annotations
@@ -55,7 +63,7 @@ class RealResultRow:
     # The raw result text, only populated when is_positive (used for organism
     # mapping) - None for a "no growth" result.
     organism_text: str | None
-    received_days: float
+    received_days: float  # booking-in time, not physical arrival - see module docstring
     verified_days: float
     turnaround_days: float
     day_of_week: str

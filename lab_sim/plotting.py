@@ -4,6 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Patch
+from scipy import stats
 
 from .config import SimulationConfig
 from .entities import SampleType
@@ -17,6 +18,26 @@ _GRID = "#e1e0d9"
 _AXIS = "#c3c2b7"
 _BLUE = "#2a78d6"
 _ORANGE = "#eb6834"
+
+# Label -> SimulationConfig attribute name for each of the simulation's own
+# per-stage (mean, stdev) Gaussian service-time parameters (processes.py's
+# _duration, floored at STAGE_TIME_FLOOR_MINUTES). Labels match report.py's
+# _PHASES so both documents describe the same stages the same way.
+STAGE_TIME_FIELDS: list[tuple[str, str]] = [
+    ("Reception", "reception_time"),
+    ("Accessioning", "accessioning_time"),
+    ("Plating", "plating_time"),
+    ("Primary incubation", "incubation_time"),
+    ("Reading", "reading_time"),
+    ("Susceptibility setup", "susceptibility_setup_time"),
+    ("Sensitivity incubation", "sensitivity_incubation_time"),
+    ("Sensitivity reading", "sensitivity_reading_time"),
+    ("Result entry", "result_entry_time"),
+    ("Verification", "verification_time"),
+]
+
+STAGE_TIME_FLOOR_MINUTES = 0.1
+_STAGE_HOUR_THRESHOLD_MINUTES = 120  # matches report._format_minutes's minutes/hours cutoff
 
 
 def _style_axes(ax) -> None:
@@ -272,6 +293,95 @@ def plot_distribution_checks(
         fontsize=8,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.93))
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    fig.savefig(output_path, dpi=150, facecolor=_SURFACE)
+    plt.close(fig)
+    return output_path
+
+
+def stage_time_params(config: SimulationConfig) -> list[dict]:
+    """Mean/stdev/floor-clip-% for each of the simulation's own per-stage
+    Gaussian service-time parameters (STAGE_TIME_FIELDS) - what
+    lab_sim/processes.py actually samples from, not a fit to any data."""
+
+    params = []
+    for label, attr in STAGE_TIME_FIELDS:
+        mean_minutes, stdev_minutes = getattr(config, attr)
+        floor_clip_pct = 100 * float(
+            stats.norm.cdf(STAGE_TIME_FLOOR_MINUTES, mean_minutes, stdev_minutes)
+        )
+        params.append({
+            "label": label,
+            "mean_minutes": mean_minutes,
+            "stdev_minutes": stdev_minutes,
+            "floor_clip_pct": floor_clip_pct,
+        })
+    return params
+
+
+def _plot_stage_time(ax, label: str, mean_minutes: float, stdev_minutes: float) -> None:
+    """Draws the Gaussian PDF processes.py actually samples from for this
+    stage (random.gauss(mean, stdev), floored at STAGE_TIME_FLOOR_MINUTES) -
+    not a fit to data, just a visualization of the configured parameters.
+    Displayed in hours for stages whose mean is >=
+    _STAGE_HOUR_THRESHOLD_MINUTES, minutes otherwise."""
+
+    use_hours = mean_minutes >= _STAGE_HOUR_THRESHOLD_MINUTES
+    scale = 1 / 60 if use_hours else 1.0
+    unit = "h" if use_hours else "min"
+
+    mean_u = mean_minutes * scale
+    stdev_u = stdev_minutes * scale
+    floor_u = STAGE_TIME_FLOOR_MINUTES * scale
+
+    x_lo = max(0.0, mean_u - 4 * stdev_u)
+    x_hi = mean_u + 4 * stdev_u
+    x = np.linspace(x_lo, x_hi, 200)
+    pdf = stats.norm.pdf(x, mean_u, stdev_u)
+
+    ax.plot(x, pdf, color=_ORANGE, linewidth=2, zorder=3)
+    ax.fill_between(x, pdf, color=_ORANGE, alpha=0.15, zorder=2)
+    if x_lo <= floor_u <= x_hi:
+        ax.axvline(floor_u, color=_INK_MUTED, linewidth=1, linestyle="--", zorder=1)
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(0, pdf.max() * 1.15)
+    ax.set_title(label, fontsize=9.5)
+    ax.set_xlabel(f"{mean_u:.1f} ± {stdev_u:.1f} {unit}", fontsize=8)
+
+
+def plot_stage_time_distributions(
+    config: SimulationConfig,
+    output_path: str = "diagnostics/stage_time_distributions.png",
+) -> str:
+    """Visualizes config.py's own per-stage (mean, stdev) Gaussian
+    service-time assumptions, one small panel per stage."""
+
+    params = stage_time_params(config)
+    n = len(params)
+    cols = 5
+    rows = -(-n // cols)  # ceil division
+
+    fig, axes = plt.subplots(rows, cols, figsize=(2.6 * cols, 2.6 * rows))
+    axes = np.atleast_2d(axes)
+
+    for i, p in enumerate(params):
+        ax = axes[i // cols, i % cols]
+        _plot_stage_time(ax, p["label"], p["mean_minutes"], p["stdev_minutes"])
+        _style_axes(ax)
+        if i % cols == 0:
+            ax.set_ylabel("density", fontsize=9)
+
+    for i in range(n, rows * cols):
+        axes[i // cols, i % cols].axis("off")
+
+    fig.patch.set_facecolor(_SURFACE)
+    fig.suptitle(
+        "Per-stage service-time parameters (Gaussian, floored at "
+        f"{STAGE_TIME_FLOOR_MINUTES} min)",
+        color=_INK_PRIMARY, fontsize=10.5, y=1.0,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     fig.savefig(output_path, dpi=150, facecolor=_SURFACE)
     plt.close(fig)

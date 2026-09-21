@@ -1,6 +1,6 @@
 from .config import SampleTypeProfile, SimulationConfig
 from .entities import Gender, Organism, Patient, Priority, Sample, SampleType
-from .plotting import plot_distribution_checks
+from .plotting import plot_distribution_checks, plot_stage_time_distributions
 from .report import render_html_report
 from .resources import LabResources
 from .stats import StatsCollector
@@ -19,5 +19,6 @@ __all__ = [
     "StatsCollector",
     "run_simulation",
     "plot_distribution_checks",
+    "plot_stage_time_distributions",
     "render_html_report",
 ]

@@ -272,17 +272,20 @@ def render_html_report(
   <div class="subtitle">
     {total_rows} rows from Data/Received_sample_data, spanning {span_days:.1f} days.
     "Real data" analysis only - nothing here has been written back to lab_sim/config.py.
-    Turnaround here is receipt-to-verification only; the dataset has no per-stage
+    Turnaround here is booking-in-to-verification only; the dataset has no per-stage
     timestamps, so individual process-stage assumptions (reception, plating, incubation,
-    ...) can't be validated, only the aggregate shape.
+    ...) can't be validated, only the aggregate shape. <strong>anon_received is when the
+    sample is booked in at reception, not when it physically reaches the lab</strong> (see
+    TODO.md) - so "inter-arrival gap" below really means inter-booking-in gap, and
+    turnaround excludes whatever wait happens before booking-in.
   </div>
 
   <h2>Inter-arrival fit (Poisson-arrival assumption)</h2>
-  <p class="subtitle" style="margin-top:-4px;">Real mean inter-arrival vs. the configured SampleTypeProfile mean, and a K-S test against an exponential distribution fitted to the real gaps. A low K-S stat / high p-value supports the exponential (Poisson-arrival) assumption.</p>
+  <p class="subtitle" style="margin-top:-4px;">Real mean gap between booking-in events vs. the configured SampleTypeProfile mean (which models lab_sim/arrivals.py's true physical arrival process), and a K-S test against an exponential distribution fitted to the real gaps. A low K-S stat / high p-value supports the exponential (Poisson-arrival) assumption.</p>
   <div class="table-scroll">{_interarrival_table(summaries)}</div>
 
   <h2>Turnaround time fit (aggregate shape)</h2>
-  <p class="subtitle" style="margin-top:-4px;">Best-fit distribution among normal/lognormal/gamma, selected by AIC, fitted to receipt-to-verification time pooled across positive and negative results.</p>
+  <p class="subtitle" style="margin-top:-4px;">Best-fit distribution among normal/lognormal/gamma, selected by AIC, fitted to booking-in-to-verification time pooled across positive and negative results.</p>
   <div class="table-scroll">{_turnaround_table(summaries)}</div>
 
   <h2>Turnaround time: positive vs. negative</h2>
@@ -333,24 +336,33 @@ def render_html_report(
   <p class="subtitle" style="margin-top:-4px;">
     That means most of the overdispersion - confirmed independently by the index-of-dispersion
     table below, 5-50&times; a homogeneous Poisson process at every group - is happening at a
-    finer time grain than day-of-week, most plausibly business-hours/ward-round clustering within
-    each day. That can't be modeled from this export: <code>anon_received</code>'s fractional-day
-    component isn't anchored to true midnight (see TODO.md), so hour-of-day isn't reliable yet.
-    A hyperexponential/mixture-of-exponentials model was also considered, but it's mathematically
-    a discrete-rate mixture without tracking <em>when</em> each rate applies, so it shares the
-    day-of-week NHPP's blind spot to intra-day structure - the day-of-week rates already computed
-    make a separate fit redundant for this review.
+    finer time grain than day-of-week. There's now a much better-grounded explanation than
+    speculating about business hours: <code>anon_received</code> is when a sample is
+    <strong>booked in at reception</strong>, not when it physically arrives at the lab (see
+    TODO.md), so every gap fitted above is really an inter-booking-in gap. Booking-in is a
+    staff-paced LIS-logging step, not the external process generating physical specimens - of
+    course it doesn't look like a clean Poisson process; it looks like reception throughput.
+    That alone plausibly accounts for most of the residual burstiness the day-of-week
+    correction couldn't reach. Genuine hour-of-day arrival structure still can't be checked
+    from this export either way, since <code>anon_received</code>'s fractional-day component
+    isn't anchored to true midnight. A hyperexponential/mixture-of-exponentials model was also
+    considered, but it's mathematically a discrete-rate mixture without tracking <em>when</em>
+    each rate applies, so it shares the day-of-week NHPP's blind spot to intra-day structure -
+    the day-of-week rates already computed make a separate fit redundant for this review.
   </p>
   <p class="subtitle" style="margin-top:-4px;">
     <strong>Recommendation:</strong> still worth encoding day-of-week rate variation in the
     simulation - it's real, statistically confirmed, and cheap to implement as a 7-bucket rate
-    multiplier - but don't expect it alone to fix the exponential K-S rejection. Plain Weibull
-    fit to the pooled (non-rescaled) gaps captures far more of the shape (see the AIC
-    improvement column below) than the day-of-week NHPP does, so a pragmatic interim arrival
-    model - if/when this feeds a <code>lab_sim/arrivals.py</code> change - is day-of-week rate
-    buckets with a Weibull, not exponential, gap distribution within each bucket. The bigger
-    lever is fixing the timestamp anchoring so hour-of-day structure can be modeled directly;
-    that should be the priority once a corrected extraction is available.
+    multiplier - but don't expect it alone to fix the exponential K-S rejection, since the gaps
+    it's being tested against are booking-in gaps, not <code>lab_sim/arrivals.py</code>'s
+    modeled physical-arrival process. Plain Weibull fit to the pooled (non-rescaled) gaps
+    captures far more of the shape (see the AIC improvement column below) than the day-of-week
+    NHPP does, so a pragmatic interim arrival model - if/when this feeds a
+    <code>lab_sim/arrivals.py</code> change - is day-of-week rate buckets with a Weibull, not
+    exponential, gap distribution within each bucket. The bigger levers are getting a
+    booking-in-to-verification split that isolates true physical arrival time, and fixing the
+    timestamp anchoring so hour-of-day structure can be modeled directly - both should be the
+    priority over further distributional tweaks once a corrected extraction is available.
   </p>
 
   <h3>Day-of-week arrival rate (arrivals/day, exact-occurrence denominator)</h3>
