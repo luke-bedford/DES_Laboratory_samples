@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Real data distribution fits</title>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #fcfcfb;
+    color: #0b0b0b;
+    margin: 0;
+    padding: 32px 24px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .subtitle { color: #52514e; margin-bottom: 24px; }
+  h2 { font-size: 1.05rem; margin: 32px 0 10px; color: #0b0b0b; }
+  table {
+    width: 100%; border-collapse: collapse; background: #fff;
+    border: 1px solid #e1e0d9; border-radius: 8px; overflow: hidden;
+    font-size: 0.85rem;
+  }
+  th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid #e1e0d9; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: #52514e; font-weight: 600; background: #f5f4f1; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #f9f8f5; }
+  .table-scroll { overflow-x: auto; }
+  footer { margin-top: 32px; color: #898781; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Real data vs. simulation assumptions</h1>
+  <div class="subtitle">
+    67212 rows from Data/Received_sample_data, spanning 77.6 days.
+    "Real data" analysis only - nothing here has been written back to lab_sim/config.py.
+    Turnaround here is receipt-to-verification only; the dataset has no per-stage
+    timestamps, so individual process-stage assumptions (reception, plating, incubation,
+    ...) can't be validated, only the aggregate shape.
+  </div>
+
+  <h2>Inter-arrival fit (Poisson-arrival assumption)</h2>
+  <p class="subtitle" style="margin-top:-4px;">Real mean inter-arrival vs. the configured SampleTypeProfile mean, and a K-S test against an exponential distribution fitted to the real gaps. A low K-S stat / high p-value supports the exponential (Poisson-arrival) assumption.</p>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Gaps (n)</th><th>Real mean inter-arrival</th><th>Configured mean</th><th>K-S stat vs. exponential</th></tr></thead><tbody><tr><td>Blood Culture</td><td>5844</td><td>18.8 min</td><td>40.0 min</td><td>0.684 (p=0.000)</td></tr><tr><td>Tissue</td><td>481</td><td>3.8 h</td><td>2.0 h</td><td>0.504 (p=0.000)</td></tr><tr><td>Urine</td><td>9987</td><td>11.2 min</td><td>70.0 min</td><td>0.598 (p=0.000)</td></tr><tr><td>Swab</td><td>22593</td><td>4.9 min</td><td>2.0 h</td><td>0.623 (p=0.000)</td></tr><tr><td>Stool</td><td>3852</td><td>28.5 min</td><td>4.0 h</td><td>0.728 (p=0.000)</td></tr><tr><td>Sputum</td><td>3253</td><td>33.7 min</td><td>4.0 h</td><td>0.757 (p=0.000)</td></tr><tr><td>Multi-Site</td><td>12929</td><td>8.6 min</td><td>—</td><td>0.766 (p=0.000)</td></tr></tbody></table></div>
+
+  <h2>Turnaround time fit (aggregate shape)</h2>
+  <p class="subtitle" style="margin-top:-4px;">Best-fit distribution among normal/lognormal/gamma, selected by AIC, fitted to receipt-to-verification time pooled across positive and negative results.</p>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Completed (n)</th><th>Mean</th><th>Median</th><th>Best-fit distribution (AIC-selected)</th><th>K-S stat vs. best fit</th></tr></thead><tbody><tr><td>Blood Culture</td><td>7517</td><td>123.3 h</td><td>120.2 h</td><td>lognormal (0.24, 1.93, 116.97)</td><td>0.433 (p=0.000)</td></tr><tr><td>Tissue</td><td>501</td><td>329.8 h</td><td>192.8 h</td><td>gamma (0.81, 43.04, 351.1)</td><td>0.123 (p=0.000)</td></tr><tr><td>Urine</td><td>10239</td><td>64.7 h</td><td>52.1 h</td><td>lognormal (1.07, 18.97, 28.91)</td><td>0.132 (p=0.000)</td></tr><tr><td>Swab</td><td>23347</td><td>55.3 h</td><td>46.7 h</td><td>lognormal (0.59, -0.11, 45.92)</td><td>0.139 (p=0.000)</td></tr><tr><td>Stool</td><td>3930</td><td>72.3 h</td><td>69.3 h</td><td>lognormal (0.33, -1.85, 69.7)</td><td>0.111 (p=0.000)</td></tr><tr><td>Sputum</td><td>3278</td><td>107.1 h</td><td>64.2 h</td><td>lognormal (0.78, 26.39, 46.99)</td><td>0.142 (p=0.000)</td></tr><tr><td>Multi-Site</td><td>16021</td><td>29.2 h</td><td>25.3 h</td><td>lognormal (0.97, 20.08, 5.53)</td><td>0.031 (p=0.000)</td></tr></tbody></table></div>
+
+  <h2>Turnaround time: positive vs. negative</h2>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Positive (n)</th><th>Positive mean</th><th>Positive median</th><th>Negative (n)</th><th>Negative mean</th><th>Negative median</th></tr></thead><tbody><tr><td>Blood Culture</td><td>700</td><td>90.5 h</td><td>79.1 h</td><td>6817</td><td>126.7 h</td><td>120.2 h</td></tr><tr><td>Tissue</td><td>354</td><td>208.0 h</td><td>171.1 h</td><td>147</td><td>623.1 h</td><td>550.8 h</td></tr><tr><td>Urine</td><td>5097</td><td>93.9 h</td><td>92.1 h</td><td>5142</td><td>35.8 h</td><td>31.3 h</td></tr><tr><td>Swab</td><td>6828</td><td>85.7 h</td><td>74.2 h</td><td>16519</td><td>42.8 h</td><td>29.5 h</td></tr><tr><td>Stool</td><td>224</td><td>100.7 h</td><td>91.8 h</td><td>3706</td><td>70.6 h</td><td>68.6 h</td></tr><tr><td>Sputum</td><td>1470</td><td>109.8 h</td><td>80.3 h</td><td>1808</td><td>105.0 h</td><td>56.7 h</td></tr><tr><td>Multi-Site</td><td>191</td><td>80.7 h</td><td>71.6 h</td><td>15830</td><td>28.6 h</td><td>25.2 h</td></tr></tbody></table></div>
+
+  <h2>Positivity rate: real vs. configured</h2>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Rows (n)</th><th>Positive (n)</th><th>Real % positive</th><th>Configured % positive</th></tr></thead><tbody><tr><td>Blood Culture</td><td>7517</td><td>700</td><td>9.3%</td><td>12.0%</td></tr><tr><td>Tissue</td><td>501</td><td>354</td><td>70.7%</td><td>25.0%</td></tr><tr><td>Urine</td><td>10239</td><td>5097</td><td>49.8%</td><td>30.0%</td></tr><tr><td>Swab</td><td>23347</td><td>6828</td><td>29.2%</td><td>40.0%</td></tr><tr><td>Stool</td><td>3930</td><td>224</td><td>5.7%</td><td>15.0%</td></tr><tr><td>Sputum</td><td>3278</td><td>1470</td><td>44.8%</td><td>30.0%</td></tr><tr><td>Multi-Site</td><td>16021</td><td>191</td><td>1.2%</td><td>—</td></tr></tbody></table></div>
+
+  <h2>Organism mix: real vs. configured</h2>
+  <p class="subtitle" style="margin-top:-4px;">Real organism text is matched to the model's Organism enum by substring (see analysis/organism_mapping.py); anything unmatched falls under Other.</p>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Organism</th><th>Real count</th><th>Real % of positives</th><th>Configured %</th></tr></thead><tbody><tr><td>Blood Culture</td><td>Other</td><td>407</td><td>58.1%</td><td>10.0%</td></tr><tr><td>Blood Culture</td><td>Escherichia Coli</td><td>114</td><td>16.3%</td><td>25.0%</td></tr><tr><td>Blood Culture</td><td>Staphylococcus Aureus</td><td>76</td><td>10.9%</td><td>35.0%</td></tr><tr><td>Blood Culture</td><td>Klebsiella Pneumoniae</td><td>37</td><td>5.3%</td><td>15.0%</td></tr><tr><td>Blood Culture</td><td>Enterococcus Spp</td><td>34</td><td>4.9%</td><td>15.0%</td></tr><tr><td>Blood Culture</td><td>Pseudomonas Aeruginosa</td><td>22</td><td>3.1%</td><td>—</td></tr><tr><td>Blood Culture</td><td>Candida Spp</td><td>10</td><td>1.4%</td><td>—</td></tr><tr><td>Tissue</td><td>Other</td><td>177</td><td>50.0%</td><td>25.0%</td></tr><tr><td>Tissue</td><td>Staphylococcus Aureus</td><td>97</td><td>27.4%</td><td>40.0%</td></tr><tr><td>Tissue</td><td>Escherichia Coli</td><td>28</td><td>7.9%</td><td>15.0%</td></tr><tr><td>Tissue</td><td>Pseudomonas Aeruginosa</td><td>23</td><td>6.5%</td><td>20.0%</td></tr><tr><td>Tissue</td><td>Candida Spp</td><td>20</td><td>5.6%</td><td>—</td></tr><tr><td>Tissue</td><td>Enterococcus Spp</td><td>6</td><td>1.7%</td><td>—</td></tr><tr><td>Tissue</td><td>Klebsiella Pneumoniae</td><td>3</td><td>0.8%</td><td>—</td></tr><tr><td>Urine</td><td>Escherichia Coli</td><td>2496</td><td>49.0%</td><td>50.0%</td></tr><tr><td>Urine</td><td>Other</td><td>1439</td><td>28.2%</td><td>10.0%</td></tr><tr><td>Urine</td><td>Enterococcus Spp</td><td>521</td><td>10.2%</td><td>15.0%</td></tr><tr><td>Urine</td><td>Klebsiella Pneumoniae</td><td>371</td><td>7.3%</td><td>15.0%</td></tr><tr><td>Urine</td><td>Candida Spp</td><td>157</td><td>3.1%</td><td>—</td></tr><tr><td>Urine</td><td>Pseudomonas Aeruginosa</td><td>67</td><td>1.3%</td><td>10.0%</td></tr><tr><td>Urine</td><td>Staphylococcus Aureus</td><td>46</td><td>0.9%</td><td>—</td></tr><tr><td>Swab</td><td>Other</td><td>2995</td><td>43.9%</td><td>35.0%</td></tr><tr><td>Swab</td><td>Candida Spp</td><td>1671</td><td>24.5%</td><td>—</td></tr><tr><td>Swab</td><td>Staphylococcus Aureus</td><td>1538</td><td>22.5%</td><td>45.0%</td></tr><tr><td>Swab</td><td>Pseudomonas Aeruginosa</td><td>304</td><td>4.5%</td><td>20.0%</td></tr><tr><td>Swab</td><td>Escherichia Coli</td><td>161</td><td>2.4%</td><td>—</td></tr><tr><td>Swab</td><td>Enterococcus Spp</td><td>83</td><td>1.2%</td><td>—</td></tr><tr><td>Swab</td><td>Klebsiella Pneumoniae</td><td>76</td><td>1.1%</td><td>—</td></tr><tr><td>Stool</td><td>Other</td><td>167</td><td>74.6%</td><td>100.0%</td></tr><tr><td>Stool</td><td>Escherichia Coli</td><td>57</td><td>25.4%</td><td>—</td></tr><tr><td>Sputum</td><td>Other</td><td>569</td><td>38.7%</td><td>35.0%</td></tr><tr><td>Sputum</td><td>Candida Spp</td><td>448</td><td>30.5%</td><td>—</td></tr><tr><td>Sputum</td><td>Pseudomonas Aeruginosa</td><td>298</td><td>20.3%</td><td>25.0%</td></tr><tr><td>Sputum</td><td>Staphylococcus Aureus</td><td>87</td><td>5.9%</td><td>20.0%</td></tr><tr><td>Sputum</td><td>Escherichia Coli</td><td>38</td><td>2.6%</td><td>—</td></tr><tr><td>Sputum</td><td>Klebsiella Pneumoniae</td><td>30</td><td>2.0%</td><td>20.0%</td></tr><tr><td>Multi-Site</td><td>Staphylococcus Aureus</td><td>191</td><td>100.0%</td><td>—</td></tr></tbody></table></div>
+
+  <h2>Arrivals by day of week</h2>
+  <p class="subtitle" style="margin-top:-4px;">The simulation's arrival process is constant-rate Poisson with no day-of-week variation; this table is descriptive only.</p>
+  <div class="table-scroll"><table><thead><tr><th>Day received</th><th>Rows</th><th>%</th></tr></thead><tbody><tr><td>Monday</td><td>9591</td><td>14%</td></tr><tr><td>Tuesday</td><td>10505</td><td>16%</td></tr><tr><td>Wednesday</td><td>11516</td><td>17%</td></tr><tr><td>Thursday</td><td>10160</td><td>15%</td></tr><tr><td>Friday</td><td>9653</td><td>14%</td></tr><tr><td>Saturday</td><td>8723</td><td>13%</td></tr><tr><td>Sunday</td><td>7064</td><td>11%</td></tr></tbody></table></div>
+
+  <h2>Specimen types not yet modeled</h2>
+  <p class="subtitle" style="margin-top:-4px;">Present in the real data but not in SampleType and not analyzed above.</p>
+  <div class="table-scroll"><table><thead><tr><th>Specimen type</th><th>Rows</th></tr></thead><tbody><tr><td>Nail</td><td>657</td></tr><tr><td>Body Fluid</td><td>380</td></tr><tr><td>Breast milk</td><td>352</td></tr><tr><td>Broncho-alveolar Lavage</td><td>268</td></tr><tr><td>Environmental</td><td>208</td></tr><tr><td>Stem Cells</td><td>184</td></tr><tr><td>Drain - Tube - Other device</td><td>137</td></tr><tr><td>Fluid</td><td>51</td></tr><tr><td>Post mortem swab</td><td>42</td></tr><tr><td>Cerebrospinal Fluid</td><td>25</td></tr><tr><td>Synovial Fluid</td><td>22</td></tr><tr><td>Hair</td><td>22</td></tr><tr><td>Dialysis fluid</td><td>15</td></tr><tr><td>Transport solution</td><td>8</td></tr><tr><td>Other</td><td>3</td></tr><tr><td>Vitreous humor</td><td>2</td></tr><tr><td>Aspirate</td><td>1</td></tr><tr><td>Tissue - Post mortem</td><td>1</td></tr><tr><td>Tissue - Biopsy</td><td>1</td></tr></tbody></table></div>
+
+  <footer>analysis.report.render_html_report</footer>
+</div>
+</body>
+</html>

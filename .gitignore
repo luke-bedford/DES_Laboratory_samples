@@ -6,3 +6,6 @@ venv/
 *.egg-info/
 .idea/
 .Rhistory
+
+# Real (anonymized but institution-identifiable) lab export - never commit this.
+Data/

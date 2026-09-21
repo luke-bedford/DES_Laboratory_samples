@@ -147,11 +147,45 @@ type.
 - `main.py` — entry point that runs a default simulation, prints a report, and writes the
   diagnostic plot and HTML summary.
 
+## Real data analysis
+
+`Data/Received_sample_data/Received_sample_data.xlsx` is a real, anonymized export of
+~67k specimen results (specimen type, organism/result, receipt and verification time,
+day of week) from an actual microbiology lab. `analysis/` fits the simulation's
+distributional assumptions against it — **as a standalone comparison, not a config
+rewrite**: nothing in `analysis/` writes to `lab_sim/config.py`.
+
+- `analysis/load_real_data.py` — loads and cleans the raw export: maps 6 of its specimen
+  types onto `SampleType` (`Blood`→`BLOOD_CULTURE`, `Tissue`→`TISSUE`, `Urine`→`URINE`,
+  `Swab`→`SWAB`, `Stool`→`STOOL`, `Sputum`→`SPUTUM`); keeps `Multi-site` (24% of the
+  data, almost certainly genuine multi-site screening swabs, not a data artifact) as a
+  7th analysis-only group; drops a handful of preliminary/interim result rows; and
+  classifies each row positive/negative on whether its result text contains `"no
+  growth"` or `"no significant growth"` (two distinct phrasings in the data — neither is
+  a substring of the other, so both are checked).
+- `analysis/organism_mapping.py` — matches a result's free-text organism name to the
+  model's small `Organism` enum by substring; anything else falls under `OTHER`.
+- `analysis/distribution_fits.py` — per group: fits an exponential to inter-arrival gaps
+  and runs a K-S test against it (the Poisson-arrival assumption every
+  `SampleTypeProfile.mean_interarrival_minutes` rests on); fits normal/lognormal/gamma to
+  aggregate turnaround time (receipt to verification) and picks the best by AIC; and
+  compares real positivity rates and organism mixes against what's currently configured.
+  The real data has no per-stage timestamps, so only *aggregate* turnaround can be
+  checked this way — not individual stage assumptions (reception, plating, incubation, …).
+- `analysis/plots.py` / `analysis/report.py` — write
+  `diagnostics/real_data_distribution_fits.png` (histogram + fitted-curve overlay per
+  group, axes independently scaled and clipped to the 99th percentile since arrival
+  rates and turnaround spans differ by orders of magnitude between groups) and
+  `diagnostics/real_data_fit_report.html` (the numeric tables), in the same visual style
+  as `lab_sim/plotting.py`/`lab_sim/report.py`.
+- `analyze_real_data.py` — entry point (`python analyze_real_data.py`).
+
 ## Usage
 
 ```bash
 pip install -r requirements.txt
 python main.py
+python analyze_real_data.py
 ```
 
 Run tests with:
