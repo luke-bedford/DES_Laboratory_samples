@@ -10,7 +10,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
 
-from .distribution_fits import GroupSummary, TURNAROUND_CANDIDATES, interarrival_gaps_minutes
+from .distribution_fits import (
+    GroupSummary,
+    TURNAROUND_CANDIDATES,
+    interarrival_gaps_minutes,
+    time_rescale_gaps,
+)
 from .load_real_data import ANALYSIS_GROUPS, RealResultRow, rows_by_group
 
 _SURFACE = "#fcfcfb"
@@ -111,6 +116,100 @@ def _plot_turnaround(ax, summary: GroupSummary, all_hours: np.ndarray, show_lege
     ax.set_xlabel("turnaround (h)", fontsize=9)
     if show_legend:
         ax.legend(frameon=False, labelcolor=_INK_SECONDARY, fontsize=7, loc="upper right")
+
+
+def _no_data_qq(ax) -> None:
+    ax.text(
+        0.5, 0.5, "not enough data",
+        transform=ax.transAxes, ha="center", va="center",
+        color=_INK_MUTED, fontsize=8,
+    )
+
+
+def _qq_exponential(ax, sample: np.ndarray, scale: float) -> None:
+    """Empirical quantiles of sample against the theoretical quantiles of an
+    Exp(scale) - points hugging the 45-degree reference line support the
+    exponential fit; systematic curvature away from it (as seen here for
+    every group, in both the raw and rescaled panels) is the signature of a
+    heavier-than-exponential tail. Log-log axes: the exponential's own
+    quantiles are extremely right-skewed at this sample size (a handful of
+    long quiet gaps vs. thousands of short ones), so linear axes crush
+    nearly every point into the corner and hide exactly the deviation this
+    plot exists to show."""
+    sample = np.sort(sample[sample > 0])
+    n = len(sample)
+    probs = (np.arange(1, n + 1) - 0.5) / n
+    theoretical = stats.expon.ppf(probs, scale=scale)
+    ax.scatter(
+        theoretical, sample, s=6, color=_BLUE, alpha=0.5,
+        edgecolors="none", zorder=2,
+    )
+    lo = max(min(float(theoretical[0]), float(sample[0])), 1e-6)
+    hi = max(float(theoretical[-1]), float(sample[-1]))
+    ax.plot([lo, hi], [lo, hi], color=_ORANGE, linewidth=1.5, zorder=3)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+
+
+def render_interarrival_qq_plots(
+    rows: list[RealResultRow],
+    summaries: dict[str, GroupSummary],
+    output_path: str = "diagnostics/real_data_interarrival_qq.png",
+) -> str:
+    """Q-Q plots for the exponential inter-arrival fits: top row is the raw
+    pooled gaps against an exponential at the fitted rate (same fit as the
+    histogram overlay in render_distribution_plots); bottom row is the same
+    arrivals after day-of-week NHPP time-rescaling (see
+    distribution_fits.time_rescale_gaps) against Exp(1) - the "does
+    correcting for day-of-week explain the curvature" comparison."""
+
+    grouped = rows_by_group(rows)
+    n = len(ANALYSIS_GROUPS)
+
+    fig, axes = plt.subplots(2, n, figsize=(2.6 * n, 6.0))
+    fig.patch.set_facecolor(_SURFACE)
+
+    for col, group in enumerate(ANALYSIS_GROUPS):
+        summary = summaries[group]
+        rows_for_group = grouped[group]
+        ax_top, ax_bottom = axes[0, col], axes[1, col]
+
+        raw_gaps = interarrival_gaps_minutes(rows_for_group)
+        mean_minutes = summary.interarrival.real_mean_minutes
+        if len(raw_gaps) >= 5 and mean_minutes:
+            _qq_exponential(ax_top, raw_gaps, mean_minutes)
+        else:
+            _no_data_qq(ax_top)
+        ax_top.set_title(_group_label(group), fontsize=10)
+        ax_top.set_xlabel("theoretical, min (fitted rate)", fontsize=7.5)
+
+        rescaled, _ = time_rescale_gaps(rows_for_group, summary.nhpp.day_rates_per_day)
+        rescaled = rescaled[rescaled > 0]
+        if len(rescaled) >= 5:
+            _qq_exponential(ax_bottom, rescaled, 1.0)
+        else:
+            _no_data_qq(ax_bottom)
+        ax_bottom.set_xlabel("theoretical, Exp(1) (day-of-week rescaled)", fontsize=7.5)
+
+        _style_axes(ax_top)
+        _style_axes(ax_bottom)
+
+    axes[0, 0].set_ylabel("observed (min)", fontsize=9)
+    axes[1, 0].set_ylabel("observed (rescaled)", fontsize=9)
+
+    fig.suptitle(
+        "Inter-arrival Q-Q: raw exponential fit (top) vs. day-of-week NHPP "
+        "time-rescaled (bottom) - points on the diagonal support the model",
+        color=_INK_PRIMARY, fontsize=10.5, y=0.99,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    fig.savefig(output_path, dpi=150, facecolor=_SURFACE)
+    plt.close(fig)
+    return output_path
 
 
 def render_distribution_plots(

@@ -6,7 +6,7 @@ report. Visual style duplicated from lab_sim/report.py rather than imported
 import os
 
 from lab_sim.entities import Organism
-from .distribution_fits import GroupSummary
+from .distribution_fits import DAY_ORDER, GroupSummary
 from .load_real_data import ANALYSIS_GROUPS
 
 _SURFACE = "#fcfcfb"
@@ -151,6 +151,80 @@ def _unmapped_types_table(unmapped: dict[str, int]) -> str:
     )
 
 
+def _day_rate_table(summaries: dict[str, GroupSummary]) -> str:
+    header = "".join(f"<th>{day[:3]}</th>" for day in DAY_ORDER)
+    rows = []
+    for group in ANALYSIS_GROUPS:
+        rates = summaries[group].nhpp.day_rates_per_day
+        cells = "".join(f"<td>{_fmt(rates.get(day))}</td>" for day in DAY_ORDER)
+        rows.append(f"<tr><td>{_group_label(group)}</td>{cells}</tr>")
+    return (
+        f"<table><thead><tr><th>Group</th>{header}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _nhpp_ks_table(summaries: dict[str, GroupSummary]) -> str:
+    rows = []
+    for group in ANALYSIS_GROUPS:
+        n = summaries[group].nhpp
+        raw = f"{n.raw_ks_stat:.3f}" if n.raw_ks_stat is not None else "—"
+        rescaled = f"{n.rescaled_ks_stat:.3f}" if n.rescaled_ks_stat is not None else "—"
+        rows.append(
+            f"<tr><td>{_group_label(group)}</td><td>{raw}</td><td>{rescaled}</td>"
+            f"<td>{n.rescaled_ties_dropped}</td></tr>"
+        )
+    return (
+        "<table><thead><tr><th>Group</th>"
+        "<th>Raw K-S vs. exponential (fitted rate)</th>"
+        "<th>Rescaled K-S vs. Exp(1) (no fitted params)</th>"
+        "<th>Ties dropped</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _weibull_table(summaries: dict[str, GroupSummary]) -> str:
+    rows = []
+    for group in ANALYSIS_GROUPS:
+        n = summaries[group].nhpp
+        raw_w, res_w = n.raw_weibull, n.rescaled_weibull
+        raw_shape = f"{raw_w.shape:.2f}" if raw_w.shape is not None else "—"
+        res_shape = f"{res_w.shape:.2f}" if res_w.shape is not None else "—"
+        raw_delta = (
+            f"{n.raw_exponential_aic - raw_w.aic:,.0f}"
+            if n.raw_exponential_aic is not None and raw_w.aic is not None
+            else "—"
+        )
+        res_delta = (
+            f"{n.rescaled_exp1_aic - res_w.aic:,.0f}"
+            if n.rescaled_exp1_aic is not None and res_w.aic is not None
+            else "—"
+        )
+        rows.append(
+            f"<tr><td>{_group_label(group)}</td>"
+            f"<td>{raw_shape}</td><td>{raw_delta}</td>"
+            f"<td>{res_shape}</td><td>{res_delta}</td></tr>"
+        )
+    return (
+        "<table><thead><tr><th>Group</th>"
+        "<th>Raw Weibull shape</th><th>Raw AIC improvement over exponential</th>"
+        "<th>Rescaled Weibull shape</th><th>Rescaled AIC improvement over Exp(1)</th>"
+        "</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _dispersion_table(summaries: dict[str, GroupSummary]) -> str:
+    rows = [
+        f"<tr><td>{_group_label(group)}</td><td>{_fmt(summaries[group].nhpp.index_of_dispersion)}</td></tr>"
+        for group in ANALYSIS_GROUPS
+    ]
+    return (
+        "<table><thead><tr><th>Group</th><th>Index of dispersion (daily counts)</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def render_html_report(
     summaries: dict[str, GroupSummary],
     day_counts: dict[str, int],
@@ -176,6 +250,8 @@ def render_html_report(
   h1 {{ font-size: 1.4rem; margin-bottom: 4px; }}
   .subtitle {{ color: {_INK_SECONDARY}; margin-bottom: 24px; }}
   h2 {{ font-size: 1.05rem; margin: 32px 0 10px; color: {_INK_PRIMARY}; }}
+  h3 {{ font-size: 0.9rem; margin: 20px 0 8px; color: {_INK_PRIMARY}; }}
+  code {{ background: #f0efea; padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }}
   table {{
     width: 100%; border-collapse: collapse; background: #fff;
     border: 1px solid {_GRID}; border-radius: 8px; overflow: hidden;
@@ -226,6 +302,77 @@ def render_html_report(
   <h2>Specimen types not yet modeled</h2>
   <p class="subtitle" style="margin-top:-4px;">Present in the real data but not in SampleType and not analyzed above.</p>
   <div class="table-scroll">{_unmapped_types_table(unmapped)}</div>
+
+  <h2>Inter-arrival distribution review: day-of-week NHPP, Weibull, and what the data actually supports</h2>
+  <p class="subtitle" style="margin-top:-4px;">
+    The day-of-week table above shows arrival rate varies significantly by weekday for every
+    group. Two candidate fixes were evaluated against that finding: modeling arrivals as a
+    non-homogeneous Poisson process (NHPP) with a piecewise-constant, day-of-week rate, and
+    fitting a Weibull distribution to inter-arrival gaps instead of an exponential.
+  </p>
+  <p class="subtitle" style="margin-top:-4px;">
+    The NHPP was tested properly, not just asserted: each row's day-of-week rate (arrivals/day,
+    using an exact denominator - the number of distinct calendar days actually labeled with that
+    weekday in the window, not occurrences&times;24h, since an ~78-day window contains each
+    weekday 11 or 12 times unevenly) defines a piecewise-constant rate function, and the
+    <em>time-rescaling theorem</em> converts each real inter-arrival gap into a rescaled interval
+    that should be i.i.d. Exp(1) if the day-of-week model is right. Unlike the raw exponential
+    K-S stat (which fits its rate from the same data), this rescaled K-S test has no fitted
+    parameter, so it is a genuine test.
+  </p>
+  <p class="subtitle" style="margin-top:-4px;">
+    <strong>The result: day-of-week correction barely moves the needle.</strong> Rescaled K-S
+    stats are only marginally lower than the raw ones, and - the single most informative number
+    here - a Weibull shape fit to the rescaled gaps stays essentially unchanged from the raw
+    shape (both cluster around 0.4-0.5 across every group) instead of collapsing toward 1. If
+    day-of-week rate variation were the whole story, that shape would have moved to 1 after
+    rescaling. It didn't, for any group. The Q-Q plots below show the same thing visually: the
+    rescaled panel (bottom row) has essentially the same S-shaped deviation from the diagonal as
+    the raw panel (top row).
+  </p>
+  <p class="subtitle" style="margin-top:-4px;">
+    That means most of the overdispersion - confirmed independently by the index-of-dispersion
+    table below, 5-50&times; a homogeneous Poisson process at every group - is happening at a
+    finer time grain than day-of-week, most plausibly business-hours/ward-round clustering within
+    each day. That can't be modeled from this export: <code>anon_received</code>'s fractional-day
+    component isn't anchored to true midnight (see TODO.md), so hour-of-day isn't reliable yet.
+    A hyperexponential/mixture-of-exponentials model was also considered, but it's mathematically
+    a discrete-rate mixture without tracking <em>when</em> each rate applies, so it shares the
+    day-of-week NHPP's blind spot to intra-day structure - the day-of-week rates already computed
+    make a separate fit redundant for this review.
+  </p>
+  <p class="subtitle" style="margin-top:-4px;">
+    <strong>Recommendation:</strong> still worth encoding day-of-week rate variation in the
+    simulation - it's real, statistically confirmed, and cheap to implement as a 7-bucket rate
+    multiplier - but don't expect it alone to fix the exponential K-S rejection. Plain Weibull
+    fit to the pooled (non-rescaled) gaps captures far more of the shape (see the AIC
+    improvement column below) than the day-of-week NHPP does, so a pragmatic interim arrival
+    model - if/when this feeds a <code>lab_sim/arrivals.py</code> change - is day-of-week rate
+    buckets with a Weibull, not exponential, gap distribution within each bucket. The bigger
+    lever is fixing the timestamp anchoring so hour-of-day structure can be modeled directly;
+    that should be the priority once a corrected extraction is available.
+  </p>
+
+  <h3>Day-of-week arrival rate (arrivals/day, exact-occurrence denominator)</h3>
+  <div class="table-scroll">{_day_rate_table(summaries)}</div>
+
+  <h3>Raw vs. day-of-week-rescaled K-S test</h3>
+  <div class="table-scroll">{_nhpp_ks_table(summaries)}</div>
+
+  <h3>Weibull fit: raw gaps vs. rescaled gaps</h3>
+  <p class="subtitle" style="margin-top:-4px;">
+    Shape &lt; 1 on the raw gaps is expected under day-varying Poisson rates (a mixture of
+    exponentials is itself over-dispersed) and isn't evidence of genuine renewal-process
+    structure on its own - the rescaled column is the one that tests whether day-of-week
+    explains it away.
+  </p>
+  <div class="table-scroll">{_weibull_table(summaries)}</div>
+
+  <h3>Index of dispersion</h3>
+  <div class="table-scroll">{_dispersion_table(summaries)}</div>
+
+  <h3>Q-Q plots: raw exponential vs. day-of-week-rescaled</h3>
+  <img src="real_data_interarrival_qq.png" alt="Inter-arrival Q-Q plots" style="max-width:100%; border:1px solid {_GRID}; border-radius: 8px;">
 
   <footer>analysis.report.render_html_report</footer>
 </div>

@@ -164,7 +164,10 @@ rewrite**: nothing in `analysis/` writes to `lab_sim/config.py`.
   growth"` or `"no significant growth"` (two distinct phrasings in the data — neither is
   a substring of the other, so both are checked).
 - `analysis/organism_mapping.py` — matches a result's free-text organism name to the
-  model's small `Organism` enum by substring; anything else falls under `OTHER`.
+  `Organism` enum by substring; anything else falls under `OTHER`. `Organism` was
+  extended from its original 6-member placeholder set to every organism with a count
+  over 100 in the real data (19 members total) - see the docstring on `Organism` in
+  `lab_sim/entities.py`.
 - `analysis/distribution_fits.py` — per group: fits an exponential to inter-arrival gaps
   and runs a K-S test against it (the Poisson-arrival assumption every
   `SampleTypeProfile.mean_interarrival_minutes` rests on); fits normal/lognormal/gamma to
@@ -175,9 +178,13 @@ rewrite**: nothing in `analysis/` writes to `lab_sim/config.py`.
 - `analysis/plots.py` / `analysis/report.py` — write
   `diagnostics/real_data_distribution_fits.png` (histogram + fitted-curve overlay per
   group, axes independently scaled and clipped to the 99th percentile since arrival
-  rates and turnaround spans differ by orders of magnitude between groups) and
-  `diagnostics/real_data_fit_report.html` (the numeric tables), in the same visual style
-  as `lab_sim/plotting.py`/`lab_sim/report.py`.
+  rates and turnaround spans differ by orders of magnitude between groups),
+  `diagnostics/real_data_interarrival_qq.png` (log-log Q-Q plots per group: raw
+  exponential fit vs. the same gaps after day-of-week NHPP time-rescaling), and
+  `diagnostics/real_data_fit_report.html` (the numeric tables, including a review of
+  candidate inter-arrival models - day-of-week NHPP via the time-rescaling theorem vs.
+  Weibull vs. index of dispersion - against the day-of-week effect the chi-square test
+  found), in the same visual style as `lab_sim/plotting.py`/`lab_sim/report.py`.
 - `analyze_real_data.py` — entry point (`python analyze_real_data.py`).
 
 ## Usage

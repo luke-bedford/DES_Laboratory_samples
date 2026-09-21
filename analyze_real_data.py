@@ -2,7 +2,7 @@ from lab_sim import SimulationConfig
 
 from analysis.distribution_fits import day_of_week_counts, summarize_all
 from analysis.load_real_data import DEFAULT_DATA_PATH, load_rows, unmapped_type_counts
-from analysis.plots import render_distribution_plots
+from analysis.plots import render_distribution_plots, render_interarrival_qq_plots
 from analysis.report import render_html_report
 
 
@@ -25,6 +25,9 @@ def main() -> None:
 
     plot_path = render_distribution_plots(rows, summaries)
     print(f"Distribution-fit plots saved to {plot_path}")
+
+    qq_path = render_interarrival_qq_plots(rows, summaries)
+    print(f"Inter-arrival Q-Q plots saved to {qq_path}")
 
     report_path = render_html_report(
         summaries, day_counts, unmapped, len(rows), span_days

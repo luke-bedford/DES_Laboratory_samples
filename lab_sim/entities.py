@@ -27,16 +27,32 @@ class Gender(Enum):
 
 
 class Organism(Enum):
-    """Pathogens the model can assign to a positive culture. A placeholder
-    set, intended to be replaced or extended once real isolate-frequency
-    data is available."""
+    """Pathogens (and a couple of non-specific culture calls) the model can
+    assign to a positive culture. Extended from the original placeholder set
+    to include every organism with a count over 100 in
+    Data/Received_sample_data/Received_sample_data.xlsx (see
+    analysis/organism_mapping.py, which maps the real free-text result to
+    these) - anything rarer still falls under OTHER."""
 
     ESCHERICHIA_COLI = auto()
     STAPHYLOCOCCUS_AUREUS = auto()
+    STAPHYLOCOCCUS_EPIDERMIDIS = auto()
     PSEUDOMONAS_AERUGINOSA = auto()
+    PSEUDOMONAS_SPP = auto()
     KLEBSIELLA_PNEUMONIAE = auto()
+    KLEBSIELLA_OXYTOCA = auto()
     ENTEROCOCCUS_SPP = auto()
     CANDIDA_SPP = auto()
+    STREPTOCOCCUS_AGALACTIAE = auto()
+    STREPTOCOCCUS_DYSGALACTIAE = auto()
+    PROTEUS_SPP = auto()
+    ENTEROBACTER_HORMAECHEI = auto()
+    CITROBACTER_KOSERI = auto()
+    HAEMOPHILUS_INFLUENZAE = auto()
+    TRICHOPHYTON_RUBRUM = auto()
+    MIXED_SKIN_FLORA = auto()
+    MIXED_GRAM_NEGATIVE_FLORA = auto()
+    HEAVY_MIXED_GROWTH = auto()
     OTHER = auto()
 
 
