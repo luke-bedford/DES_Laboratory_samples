@@ -97,6 +97,18 @@ and `lab_sim/v1/__main__.py` use each version's own output defaults (`diagnostic
 `diagnostics/v1/...`); `lab_sim/v0/__main__.py` passes `diagnostics/v0/...` explicitly, per
 the convention above.
 
+## Background reference per version
+
+`Background/<version>/Microbiology Context` holds the clinical-pathway brief that version was
+built against - split into per-version copies (originally one shared, unversioned file) so
+each can independently record what information was actually available at that version's
+design time, rather than one file being silently rewritten out from under an earlier version's
+documented assumptions. `lab_sim/v2/`'s own source comments/docstrings reference
+`Background/v2/Microbiology Context` specifically; `lab_sim/v0/` and `lab_sim/v1/` still say
+the bare, unqualified "Background/Microbiology Context" in their own frozen code, since that's
+what the reference actually looked like when each was current and is not something the freeze
+policy allows retroactively "fixing."
+
 ## Out of scope so far
 
 - There is no permanent regression test for older versions - `tests/test_smoke.py` tests

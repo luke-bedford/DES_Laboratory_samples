@@ -105,7 +105,7 @@ def build_summary(stats: StatsCollector, config: SimulationConfig) -> dict:
             "max_hours": max(hours) if hours else None,
         }
 
-    # One patient per sample (see Background/Microbiology Context), so
+    # One patient per sample (see Background/v2/Microbiology Context), so
     # demographics are read off the observed arrivals' patients directly.
     patients = [s.patient for s in observed_arrivals]
     ages = [p.age for p in patients]
@@ -388,7 +388,7 @@ def render_html_report(
   <div class="table-scroll">{_counts_table(summary)}</div>
 
   <h2>Patient demographics</h2>
-  <p class="subtitle" style="margin-top:-4px;">One patient per arrived sample (see Background/Microbiology Context); age bands use the thresholds that modulate positivity (config.young_age_threshold / elderly_age_threshold).</p>
+  <p class="subtitle" style="margin-top:-4px;">One patient per arrived sample (see Background/v2/Microbiology Context); age bands use the thresholds that modulate positivity (config.young_age_threshold / elderly_age_threshold).</p>
   <div class="demo-grid">
     <div><div class="label">By gender</div>{_gender_table(summary)}</div>
     <div><div class="label">Age summary</div>{_age_summary_table(summary)}</div>

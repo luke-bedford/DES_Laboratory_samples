@@ -17,7 +17,7 @@ def _positive_probability(
     profile: SampleTypeProfile, sample: Sample, config: SimulationConfig
 ) -> float:
     """Combines the sample type's base positivity with the patient's gender
-    and age, per Background/Microbiology Context ("Patient have an age and
+    and age, per Background/v2/Microbiology Context ("Patient have an age and
     gender characteristic will influence sample positivity rate...")."""
 
     probability = profile.positive_probability

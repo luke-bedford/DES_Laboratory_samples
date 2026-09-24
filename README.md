@@ -24,7 +24,7 @@ versions and why. Each version is runnable standalone: `python -m lab_sim.v2` (o
 > what `python main.py` actually does rather than what it did when first written.
 
 **Entities** (`lab_sim/v2/entities.py`). A `Sample` is generated from a unique `Patient` (id,
-`age`, `Gender`) — see Background/Microbiology Context, which notes that for now each
+`age`, `Gender`) — see Background/v2/Microbiology Context, which notes that for now each
 sample comes from its own patient. Each sample carries an id, a `SampleType` (20 members as
 of model v1 — every real specimen type with a count over 20 in the real dataset, plus an
 `OTHER` catch-all for everything rarer; see the enum's docstring), a `Priority` (`ROUTINE` or
@@ -35,7 +35,7 @@ is resolved partway through the journey, an `Organism` (set only if positive), a
 time is simply `reported - arrival_time`.
 
 **Resources** (`lab_sim/v2/resources.py`) model the three staff groups from
-Background/Microbiology Context, plus shared equipment, as `simpy.Resource` pools — plain
+Background/v2/Microbiology Context, plus shared equipment, as `simpy.Resource` pools — plain
 FIFO queues with no priority ordering: HSSW (7) who receive/book in, accession, plate, and
 set up susceptibility testing; BMS (4) who read plates and susceptibilities and enter
 results on the LIS; clinical microbiologists (2) who verify and sign off the final report;
@@ -79,7 +79,7 @@ live in `SimulationConfig` (`lab_sim/v2/config.py`).
 
 **Patients** (`lab_sim/v2/patients.py`). Each new sample's patient gets an age (Gaussian,
 clipped to a configurable range) and a gender (weighted categorical draw). These feed into
-positivity — see below — per Background/Microbiology Context's note that patient age and
+positivity — see below — per Background/v2/Microbiology Context's note that patient age and
 gender "influence sample positivity rate."
 
 **The journey** (`lab_sim/v2/processes.py`) is a strict sequence of resource requests, with

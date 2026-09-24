@@ -6,7 +6,7 @@ from .config import SimulationConfig
 class LabResources:
     """SimPy resources representing staff, benches, and equipment shared by
     samples. Staff pools follow the three roles in
-    Background/Microbiology Context: HSSW, BMS, and clinical
+    Background/v2/Microbiology Context: HSSW, BMS, and clinical
     microbiologists."""
 
     def __init__(self, env: simpy.Environment, config: SimulationConfig):

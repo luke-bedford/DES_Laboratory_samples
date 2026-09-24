@@ -81,7 +81,7 @@ class Organism(Enum):
 class Patient:
     """The patient a sample was taken from. For now each sample comes from
     its own unique patient; linking repeat samples to a shared patient is a
-    future extension (see Background/Microbiology Context)."""
+    future extension (see Background/v2/Microbiology Context)."""
 
     id: int = field(default_factory=lambda: next(_patient_id_counter))
     age: float = 50.0
