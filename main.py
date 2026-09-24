@@ -1,28 +1,9 @@
-from lab_sim.v1 import (
-    MODEL_VERSION,
-    SimulationConfig,
-    plot_distribution_checks,
-    plot_stage_time_distributions,
-    render_html_report,
-    run_simulation,
-)
+"""Convenience entry point for the current model version. Equivalent to
+`python -m lab_sim.v1`; see lab_sim/v0/__main__.py to run the frozen v0
+snapshot standalone instead.
+"""
 
-
-def main() -> None:
-    print(f"=== Model {MODEL_VERSION} ===")
-    config = SimulationConfig()
-    stats = run_simulation(config)
-    stats.print_report()
-
-    output_path = plot_distribution_checks(stats, config)
-    print(f"Distribution checks saved to {output_path}")
-
-    stage_time_path = plot_stage_time_distributions(config)
-    print(f"Stage time distribution plots saved to {stage_time_path}")
-
-    report_path = render_html_report(stats, config)
-    print(f"Summary report saved to {report_path}")
-
+from lab_sim.v1.__main__ import main
 
 if __name__ == "__main__":
     main()

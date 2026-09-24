@@ -48,10 +48,19 @@ single flat `diagnostics/` folder, so running one version's outputs doesn't over
 another's. `lab_sim/v1/plotting.py` and `lab_sim/v1/report.py` default their `output_path`
 arguments to `diagnostics/v1/...`, as does `analysis/` (which reports against a v1
 `SimulationConfig` - see `analysis/distribution_fits.py`'s module docstring). `lab_sim/v0/`'s
-module defaults still point at the flat `diagnostics/...` path, unchanged, because those
-files are frozen exactly as they were at the `model-v0` tag and nothing in this repo calls
-them - a caller that wants v0's output under `diagnostics/v0/` passes `output_path`
-explicitly rather than the frozen default being edited.
+own module defaults still point at the flat `diagnostics/...` path, unchanged, because those
+files are frozen exactly as they were at the `model-v0` tag - instead, `lab_sim/v0/__main__.py`
+(new tooling, not part of the frozen snapshot) passes `diagnostics/v0/...` explicitly on every
+call rather than the frozen defaults being edited. See "Standalone entry points" below.
+
+## Standalone entry points
+
+Each version can be run on its own: `python -m lab_sim.v1` (equivalently, `python main.py` at
+the repo root) runs the current model; `python -m lab_sim.v0` runs the frozen snapshot. Both
+are `lab_sim/<version>/__main__.py` - a `main()` function plus a `if __name__ ==
+"__main__":` guard, so they're importable too. `lab_sim/v1/__main__.py` uses v1's own output
+defaults (`diagnostics/v1/...`); `lab_sim/v0/__main__.py` passes `diagnostics/v0/...`
+explicitly, per the convention above.
 
 ## Out of scope so far
 

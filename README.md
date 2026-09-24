@@ -13,7 +13,9 @@ Poisson process (NHPP) calibrated from that same dataset - see the Arrivals sect
 `lab_sim/v1/entities.py`'s `SampleType` docstring. There is no implicit "current" version at
 the top of the package; every import states its version explicitly
 (`from lab_sim.v1 import ...`). See `lab_sim/CHANGES.md` for what changed between versions
-and why.
+and why. Each version is runnable standalone: `python -m lab_sim.v1` (or `python main.py`,
+equivalent) runs the current model, `python -m lab_sim.v0` runs the frozen snapshot - each
+writes its own diagnostics to `diagnostics/<version>/`.
 
 ## Narrative: how the simulation behaves
 
