@@ -22,7 +22,7 @@ class SampleTypeProfile:
     # (arrivals.py). For a batched type (see `batched`) this is the rate of
     # arrival *events* (batches), not individual samples. Replaces a single
     # constant rate since every type's real arrival rate depends
-    # significantly on weekday (diagnostics/real_data_fit_report.html's
+    # significantly on weekday (diagnostics/v1/real_data_fit_report.html's
     # day-of-week section).
     arrivals_per_day_by_weekday: dict[str, float]
 

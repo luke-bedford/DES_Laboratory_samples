@@ -7,7 +7,7 @@
       which models the simulation's true physical arrival process in `lab_sim/v1/arrivals.py`) are
       really inter-*booking-in* gaps - staff-paced, not a clean external process - which is a
       much better-grounded explanation for the overdispersion the day-of-week NHPP/Weibull
-      review couldn't fully explain (see `diagnostics/real_data_fit_report.html`) than
+      review couldn't fully explain (see `diagnostics/v1/real_data_fit_report.html`) than
       day-of-week alone. And real turnaround (verified − received) excludes whatever wait
       happens before booking-in, so it understates true sample-to-result time from a clinical
       perspective. A future re-extraction should capture true physical arrival time separately
@@ -18,7 +18,7 @@
       doesn't currently line up with true time-of-day, so hour-of-day can't be read off it
       as-is. A re-extraction needs to anchor the fractional part to actual midnight (or
       otherwise supply the real offset) so arrivals can eventually be fitted per hour-of-day,
-      not just per day-of-week (see `diagnostics/real_data_fit_report.html`'s day-of-week
+      not just per day-of-week (see `diagnostics/v1/real_data_fit_report.html`'s day-of-week
       table for why the current constant-rate Poisson arrival model is missing this).
 - [ ] Extract patient demographic data (age, gender, ...) alongside the specimen results.
       The real dataset currently has no patient-level fields at all, so the positivity/organism

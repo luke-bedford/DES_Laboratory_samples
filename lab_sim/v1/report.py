@@ -317,7 +317,7 @@ def _stage_time_table(config: SimulationConfig) -> str:
 def render_html_report(
     stats: StatsCollector,
     config: SimulationConfig,
-    output_path: str = "diagnostics/summary_report.html",
+    output_path: str = "diagnostics/v1/summary_report.html",
 ) -> str:
     """Renders arrival counts, turnaround times, and average per-phase
     durations, each broken down by sample type, to a standalone HTML file."""

@@ -218,7 +218,7 @@ def _plot_turnaround_times(
 def plot_distribution_checks(
     stats: StatsCollector,
     config: SimulationConfig,
-    output_path: str = "diagnostics/distribution_checks.png",
+    output_path: str = "diagnostics/v1/distribution_checks.png",
     bucket_minutes: float = 60.0,
 ) -> str:
     """Renders arrival-count and turnaround-time diagnostics as small multiples,
@@ -357,7 +357,7 @@ def _plot_stage_time(ax, label: str, mean_minutes: float, stdev_minutes: float) 
 
 def plot_stage_time_distributions(
     config: SimulationConfig,
-    output_path: str = "diagnostics/stage_time_distributions.png",
+    output_path: str = "diagnostics/v1/stage_time_distributions.png",
 ) -> str:
     """Visualizes config.py's own per-stage (mean, stdev) Gaussian
     service-time assumptions, one small panel per stage."""

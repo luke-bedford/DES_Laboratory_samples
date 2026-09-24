@@ -156,7 +156,7 @@ def _qq_exponential(ax, sample: np.ndarray, scale: float) -> None:
 def render_interarrival_qq_plots(
     rows: list[RealResultRow],
     summaries: dict[str, GroupSummary],
-    output_path: str = "diagnostics/real_data_interarrival_qq.png",
+    output_path: str = "diagnostics/v1/real_data_interarrival_qq.png",
 ) -> str:
     """Q-Q plots for the exponential inter-arrival fits: top row is the raw
     pooled gaps against an exponential at the fitted rate (same fit as the
@@ -215,7 +215,7 @@ def render_interarrival_qq_plots(
 def render_distribution_plots(
     rows: list[RealResultRow],
     summaries: dict[str, GroupSummary],
-    output_path: str = "diagnostics/real_data_distribution_fits.png",
+    output_path: str = "diagnostics/v1/real_data_distribution_fits.png",
 ) -> str:
     grouped = rows_by_group(rows)
     n = len(ANALYSIS_GROUPS)

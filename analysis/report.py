@@ -231,7 +231,7 @@ def render_html_report(
     unmapped: dict[str, int],
     total_rows: int,
     span_days: float,
-    output_path: str = "diagnostics/real_data_fit_report.html",
+    output_path: str = "diagnostics/v1/real_data_fit_report.html",
 ) -> str:
     html = f"""<!DOCTYPE html>
 <html lang="en">

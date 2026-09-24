@@ -53,7 +53,7 @@ and will eventually need to consume several slots concurrently — see the comme
 **Arrivals** (`lab_sim/v1/arrivals.py`). Each `SampleType` runs its own independent arrival
 process, and as of model v1 that process is a **day-of-week non-homogeneous Poisson process
 (NHPP)**, not a constant-rate one — the real dataset shows every specimen type's arrival rate
-depends significantly on weekday (see `diagnostics/real_data_fit_report.html`'s day-of-week
+depends significantly on weekday (see `diagnostics/v1/real_data_fit_report.html`'s day-of-week
 section), so each `SampleTypeProfile.arrivals_per_day_by_weekday` holds seven real,
 calibrated arrivals-per-day figures (Monday–Sunday) instead of one placeholder mean.
 Simulated via Lewis-Shedler **thinning**: candidate inter-arrival gaps are drawn at the
@@ -135,7 +135,7 @@ factor as the added volume (see `SimulationConfig`'s Staffing comment), but queu
 nonlinear in utilization, and a 3-day window is barely 2-4x the ~18-34 hour minimum pipeline
 latency to begin with, so a bigger, busier system leaves proportionally more arrivals still
 mid-pipeline at the window's end. Positive-culture completions (213 in the seed-42 run) show
-up across every sample type, including the newly-added ones. `diagnostics/distribution_checks.png`
+up across every sample type, including the newly-added ones. `diagnostics/v1/distribution_checks.png`
 shows the day-of-week NHPP's effect directly: the flat Poisson overlay (now just the
 week-average rate, see `lab_sim/v1/plotting.py`) visibly diverges from bucketed arrival counts on
 particularly busy or quiet weekdays, which is expected now that arrivals are genuinely
@@ -164,11 +164,11 @@ shared per-row y-axis flattens sparse types (e.g. `OTHER`) next to high-volume o
   `observed_arrivals()`/`observed_completions()`, which filter to the post-warm-up
   observation window; `summary()` reports turnaround times and organism counts from those.
 - `lab_sim/v1/plotting.py` — renders the arrival-count and turnaround-time diagnostic plots,
-  faceted by sample type, to `diagnostics/distribution_checks.png`; also renders
-  `diagnostics/stage_time_distributions.png`, one small panel per process stage plotting the
+  faceted by sample type, to `diagnostics/v1/distribution_checks.png`; also renders
+  `diagnostics/v1/stage_time_distributions.png`, one small panel per process stage plotting the
   Gaussian PDF each stage's duration is actually drawn from (`SimulationConfig`'s `(mean,
   stdev)` pairs, floored at 0.1 minutes).
-- `lab_sim/v1/report.py` — renders a standalone HTML summary to `diagnostics/summary_report.html`:
+- `lab_sim/v1/report.py` — renders a standalone HTML summary to `diagnostics/v1/summary_report.html`:
   arrival/completion counts and turnaround times and average per-phase durations by sample
   type, turnaround time and average per-phase durations compared between culture-positive
   and culture-negative samples, and patient demographics (gender split, age summary, and
@@ -225,12 +225,12 @@ excludes whatever wait happens before booking-in.
   below). The real data has no per-stage timestamps, so only *aggregate* turnaround can be
   checked this way — not individual stage assumptions (reception, plating, incubation, …).
 - `analysis/plots.py` / `analysis/report.py` — write
-  `diagnostics/real_data_distribution_fits.png` (histogram + fitted-curve overlay per
+  `diagnostics/v1/real_data_distribution_fits.png` (histogram + fitted-curve overlay per
   group, axes independently scaled and clipped to the 99th percentile since arrival
   rates and turnaround spans differ by orders of magnitude between groups),
-  `diagnostics/real_data_interarrival_qq.png` (log-log Q-Q plots per group: raw
+  `diagnostics/v1/real_data_interarrival_qq.png` (log-log Q-Q plots per group: raw
   exponential fit vs. the same gaps after day-of-week NHPP time-rescaling), and
-  `diagnostics/real_data_fit_report.html` (the numeric tables, including a review of
+  `diagnostics/v1/real_data_fit_report.html` (the numeric tables, including a review of
   candidate inter-arrival models - day-of-week NHPP via the time-rescaling theorem vs.
   Weibull vs. index of dispersion - against the day-of-week effect the chi-square test
   found), in the same visual style as `lab_sim/v1/plotting.py`/`lab_sim/v1/report.py`.

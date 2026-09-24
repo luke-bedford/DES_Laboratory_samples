@@ -41,12 +41,20 @@ constant-rate Poisson arrivals per type. Organism mix was later calibrated from 
 (the version tagged `model-v0` includes that calibration); arrival rate and positivity
 stayed placeholder values throughout v0's lifetime. Tagged `model-v0` in git.
 
+## Diagnostics output convention
+
+Each version's plots and HTML reports land under `diagnostics/<version>/` rather than a
+single flat `diagnostics/` folder, so running one version's outputs doesn't overwrite
+another's. `lab_sim/v1/plotting.py` and `lab_sim/v1/report.py` default their `output_path`
+arguments to `diagnostics/v1/...`, as does `analysis/` (which reports against a v1
+`SimulationConfig` - see `analysis/distribution_fits.py`'s module docstring). `lab_sim/v0/`'s
+module defaults still point at the flat `diagnostics/...` path, unchanged, because those
+files are frozen exactly as they were at the `model-v0` tag and nothing in this repo calls
+them - a caller that wants v0's output under `diagnostics/v0/` passes `output_path`
+explicitly rather than the frozen default being edited.
+
 ## Out of scope so far
 
-- `diagnostics/` output is a single flat, unversioned folder - running an older version's
-  `main`-equivalent after a newer one overwrites the newer version's diagnostics output.
-  Not addressed yet; each version's own `main.py`-style entry point should be run into a
-  version-specific output directory if/when this becomes a problem.
 - There is no permanent regression test for older versions - `tests/test_smoke.py` tests
   only the current version (v1).
 - `analysis/` (the real-data comparison and distribution-fit tooling) is scoped to the
