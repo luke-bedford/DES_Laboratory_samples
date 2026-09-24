@@ -36,10 +36,16 @@ class SampleTypeProfile:
 
 
 def _default_sample_type_profiles() -> dict[SampleType, SampleTypeProfile]:
-    """Placeholder profiles reflecting rough, plausible NHS microbiology
-    patterns. Per Background/Microbiology Context, arrival rates and
-    positivity/organism mixes are eventually meant to be inferred from real
-    testing data rather than estimated here.
+    """Arrival rates and positive_probability remain rough, plausible NHS
+    microbiology placeholders (see Background/Microbiology Context) pending
+    future calibration. organism_weights, however, are calibrated directly
+    from the real dataset (Data/Received_sample_data/Received_sample_data.xlsx):
+    each SampleType's weights are the exact proportion of real positive
+    results that mapped to that Organism among positive cultures of that
+    type (see analysis/organism_mapping.py and
+    diagnostics/real_data_fit_report.html's organism-mix table - regenerate
+    via `python analyze_real_data.py` if the dataset changes). Multi-site
+    isn't included here since SampleType doesn't model it.
     """
 
     return {
@@ -48,11 +54,21 @@ def _default_sample_type_profiles() -> dict[SampleType, SampleTypeProfile]:
             batched=False,
             positive_probability=0.12,
             organism_weights={
-                Organism.STAPHYLOCOCCUS_AUREUS: 0.35,
-                Organism.ESCHERICHIA_COLI: 0.25,
-                Organism.ENTEROCOCCUS_SPP: 0.15,
-                Organism.KLEBSIELLA_PNEUMONIAE: 0.15,
-                Organism.OTHER: 0.10,
+                Organism.OTHER: 0.3586,
+                Organism.ESCHERICHIA_COLI: 0.1629,
+                Organism.STAPHYLOCOCCUS_EPIDERMIDIS: 0.1571,
+                Organism.STAPHYLOCOCCUS_AUREUS: 0.1086,
+                Organism.KLEBSIELLA_PNEUMONIAE: 0.0529,
+                Organism.ENTEROCOCCUS_SPP: 0.0486,
+                Organism.PSEUDOMONAS_AERUGINOSA: 0.0314,
+                Organism.CANDIDA_SPP: 0.0143,
+                Organism.ENTEROBACTER_HORMAECHEI: 0.0129,
+                Organism.KLEBSIELLA_OXYTOCA: 0.0129,
+                Organism.PROTEUS_SPP: 0.0100,
+                Organism.STREPTOCOCCUS_DYSGALACTIAE: 0.0100,
+                Organism.STREPTOCOCCUS_AGALACTIAE: 0.0086,
+                Organism.CITROBACTER_KOSERI: 0.0071,
+                Organism.PSEUDOMONAS_SPP: 0.0043,
             },
         ),
         SampleType.TISSUE: SampleTypeProfile(
@@ -60,10 +76,22 @@ def _default_sample_type_profiles() -> dict[SampleType, SampleTypeProfile]:
             batched=False,
             positive_probability=0.25,
             organism_weights={
-                Organism.STAPHYLOCOCCUS_AUREUS: 0.40,
-                Organism.PSEUDOMONAS_AERUGINOSA: 0.20,
-                Organism.ESCHERICHIA_COLI: 0.15,
-                Organism.OTHER: 0.25,
+                Organism.OTHER: 0.2853,
+                Organism.STAPHYLOCOCCUS_AUREUS: 0.2740,
+                Organism.ESCHERICHIA_COLI: 0.0791,
+                Organism.PSEUDOMONAS_AERUGINOSA: 0.0650,
+                Organism.STAPHYLOCOCCUS_EPIDERMIDIS: 0.0593,
+                Organism.CANDIDA_SPP: 0.0565,
+                Organism.TRICHOPHYTON_RUBRUM: 0.0537,
+                Organism.ENTEROBACTER_HORMAECHEI: 0.0367,
+                Organism.PROTEUS_SPP: 0.0198,
+                Organism.ENTEROCOCCUS_SPP: 0.0169,
+                Organism.MIXED_SKIN_FLORA: 0.0169,
+                Organism.MIXED_GRAM_NEGATIVE_FLORA: 0.0141,
+                Organism.KLEBSIELLA_PNEUMONIAE: 0.0085,
+                Organism.CITROBACTER_KOSERI: 0.0056,
+                Organism.STREPTOCOCCUS_AGALACTIAE: 0.0056,
+                Organism.STREPTOCOCCUS_DYSGALACTIAE: 0.0028,
             },
         ),
         SampleType.URINE: SampleTypeProfile(
@@ -71,11 +99,22 @@ def _default_sample_type_profiles() -> dict[SampleType, SampleTypeProfile]:
             batched=True,
             positive_probability=0.30,
             organism_weights={
-                Organism.ESCHERICHIA_COLI: 0.50,
-                Organism.KLEBSIELLA_PNEUMONIAE: 0.15,
-                Organism.ENTEROCOCCUS_SPP: 0.15,
-                Organism.PSEUDOMONAS_AERUGINOSA: 0.10,
-                Organism.OTHER: 0.10,
+                Organism.ESCHERICHIA_COLI: 0.4897,
+                Organism.ENTEROCOCCUS_SPP: 0.1022,
+                Organism.OTHER: 0.0934,
+                Organism.KLEBSIELLA_PNEUMONIAE: 0.0728,
+                Organism.PROTEUS_SPP: 0.0449,
+                Organism.HEAVY_MIXED_GROWTH: 0.0400,
+                Organism.CANDIDA_SPP: 0.0308,
+                Organism.PSEUDOMONAS_SPP: 0.0294,
+                Organism.CITROBACTER_KOSERI: 0.0241,
+                Organism.ENTEROBACTER_HORMAECHEI: 0.0171,
+                Organism.STAPHYLOCOCCUS_EPIDERMIDIS: 0.0137,
+                Organism.PSEUDOMONAS_AERUGINOSA: 0.0131,
+                Organism.KLEBSIELLA_OXYTOCA: 0.0131,
+                Organism.STAPHYLOCOCCUS_AUREUS: 0.0090,
+                Organism.STREPTOCOCCUS_AGALACTIAE: 0.0061,
+                Organism.STREPTOCOCCUS_DYSGALACTIAE: 0.0004,
             },
             # Urinary tract infections are diagnosed more often in women.
             gender_positivity_modifier={Gender.FEMALE: 1.4, Gender.MALE: 0.7},
@@ -85,28 +124,59 @@ def _default_sample_type_profiles() -> dict[SampleType, SampleTypeProfile]:
             batched=True,
             positive_probability=0.40,
             organism_weights={
-                Organism.STAPHYLOCOCCUS_AUREUS: 0.45,
-                Organism.PSEUDOMONAS_AERUGINOSA: 0.20,
-                Organism.OTHER: 0.35,
+                Organism.CANDIDA_SPP: 0.2447,
+                Organism.STAPHYLOCOCCUS_AUREUS: 0.2252,
+                Organism.MIXED_SKIN_FLORA: 0.2236,
+                Organism.OTHER: 0.0643,
+                Organism.MIXED_GRAM_NEGATIVE_FLORA: 0.0552,
+                Organism.STREPTOCOCCUS_AGALACTIAE: 0.0469,
+                Organism.PSEUDOMONAS_AERUGINOSA: 0.0445,
+                Organism.ESCHERICHIA_COLI: 0.0236,
+                Organism.STREPTOCOCCUS_DYSGALACTIAE: 0.0170,
+                Organism.ENTEROCOCCUS_SPP: 0.0122,
+                Organism.KLEBSIELLA_PNEUMONIAE: 0.0111,
+                Organism.ENTEROBACTER_HORMAECHEI: 0.0105,
+                Organism.PSEUDOMONAS_SPP: 0.0056,
+                Organism.PROTEUS_SPP: 0.0047,
+                Organism.KLEBSIELLA_OXYTOCA: 0.0037,
+                Organism.CITROBACTER_KOSERI: 0.0032,
+                Organism.STAPHYLOCOCCUS_EPIDERMIDIS: 0.0025,
+                Organism.HAEMOPHILUS_INFLUENZAE: 0.0013,
+                Organism.HEAVY_MIXED_GROWTH: 0.0001,
             },
         ),
         SampleType.STOOL: SampleTypeProfile(
             mean_interarrival_minutes=240.0,
             batched=True,
             positive_probability=0.15,
-            # Enteric pathogens (Salmonella, Campylobacter, ...) aren't
-            # modelled individually yet.
-            organism_weights={Organism.OTHER: 1.0},
+            # Real positives are only ever E. coli or Other (which covers
+            # enteric pathogens like Salmonella/Campylobacter - none of them
+            # individually clear the >100-count threshold that got an
+            # Organism member of their own, see lab_sim/entities.py).
+            organism_weights={
+                Organism.OTHER: 0.7455,
+                Organism.ESCHERICHIA_COLI: 0.2545,
+            },
         ),
         SampleType.SPUTUM: SampleTypeProfile(
             mean_interarrival_minutes=240.0,
             batched=True,
             positive_probability=0.30,
             organism_weights={
-                Organism.STAPHYLOCOCCUS_AUREUS: 0.20,
-                Organism.PSEUDOMONAS_AERUGINOSA: 0.25,
-                Organism.KLEBSIELLA_PNEUMONIAE: 0.20,
-                Organism.OTHER: 0.35,
+                Organism.CANDIDA_SPP: 0.3048,
+                Organism.PSEUDOMONAS_AERUGINOSA: 0.2027,
+                Organism.OTHER: 0.1830,
+                Organism.HAEMOPHILUS_INFLUENZAE: 0.0980,
+                Organism.STAPHYLOCOCCUS_AUREUS: 0.0592,
+                Organism.PSEUDOMONAS_SPP: 0.0327,
+                Organism.MIXED_GRAM_NEGATIVE_FLORA: 0.0306,
+                Organism.ESCHERICHIA_COLI: 0.0259,
+                Organism.KLEBSIELLA_PNEUMONIAE: 0.0204,
+                Organism.PROTEUS_SPP: 0.0122,
+                Organism.ENTEROBACTER_HORMAECHEI: 0.0102,
+                Organism.CITROBACTER_KOSERI: 0.0088,
+                Organism.KLEBSIELLA_OXYTOCA: 0.0068,
+                Organism.STREPTOCOCCUS_AGALACTIAE: 0.0048,
             },
         ),
     }
