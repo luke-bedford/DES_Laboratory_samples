@@ -65,15 +65,21 @@ def _poisson_pmf(k: int, lam: float) -> float:
 def _expected_arrivals_per_bucket(
     config: SimulationConfig, sample_type: SampleType, bucket_minutes: float
 ) -> float:
-    """Expected sample count per bucket for one sample type, given its own
-    interarrival mean (SampleTypeProfile). For a batched type this multiplies
-    in the mean batch size - only approximate, since the true per-bucket
-    count is a compound Poisson-of-batches distribution, not a pure Poisson
-    one, but close enough to anchor the diagnostic plot."""
+    """Expected sample count per bucket for one sample type, given the mean
+    of its day-of-week arrival rates (SampleTypeProfile). For a batched type
+    this multiplies in the mean batch size. Doubly approximate now: the true
+    per-bucket count is a compound Poisson-of-batches distribution even at a
+    constant rate, and arrivals are no longer constant-rate at all - this
+    overlay uses the week-average rate as a single reference line, so a
+    visible mismatch against buckets that fall on a particularly busy or
+    quiet weekday is expected and is itself evidence the day-of-week NHPP is
+    doing something, not a bug in the overlay."""
 
     profile = config.sample_type_profiles[sample_type]
+    avg_rate_per_day = sum(profile.arrivals_per_day_by_weekday.values()) / 7
+    avg_rate_per_minute = avg_rate_per_day / (24 * 60)
     batch_mean = (sum(config.batch_size_range) / 2) if profile.batched else 1.0
-    return (bucket_minutes / profile.mean_interarrival_minutes) * batch_mean
+    return bucket_minutes * avg_rate_per_minute * batch_mean
 
 
 def _plot_arrival_counts(

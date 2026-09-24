@@ -8,12 +8,33 @@ _patient_id_counter = itertools.count(1)
 
 
 class SampleType(Enum):
+    """Extended (model v1) from the original 6-member placeholder set to
+    every real specimen type with a count over 20 in
+    Data/Received_sample_data/Received_sample_data.xlsx - anything rarer
+    falls under OTHER. See lab_sim/config.py's _default_sample_type_profiles
+    docstring for how each type's arrival/positivity/organism profile was
+    calibrated. The pre-expansion 6-type model is tagged `model-v0` in git."""
+
     BLOOD_CULTURE = auto()
     TISSUE = auto()
     URINE = auto()
     SWAB = auto()
     STOOL = auto()
     SPUTUM = auto()
+    MULTI_SITE = auto()
+    NAIL = auto()
+    BODY_FLUID = auto()
+    BREAST_MILK = auto()
+    BRONCHO_ALVEOLAR_LAVAGE = auto()
+    ENVIRONMENTAL = auto()
+    STEM_CELLS = auto()
+    DRAIN_TUBE_OTHER_DEVICE = auto()
+    FLUID = auto()
+    POST_MORTEM_SWAB = auto()
+    CEREBROSPINAL_FLUID = auto()
+    SYNOVIAL_FLUID = auto()
+    HAIR = auto()
+    OTHER = auto()
 
 
 class Priority(Enum):

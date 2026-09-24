@@ -4,7 +4,10 @@ Two things are checked per specimen type (the 6 modeled types, plus Multi-site
 as a 7th analysis-only group - see load_real_data.py):
 
 1. Inter-arrival gaps against an exponential distribution (the Poisson-arrival
-   assumption every SampleTypeProfile.mean_interarrival_minutes rests on).
+   assumption every SampleTypeProfile.arrivals_per_day_by_weekday rests on -
+   as of model v1 that's a day-of-week NHPP rate, not a single constant
+   mean; _configured_mean_interarrival_minutes converts it back to a
+   comparable mean-minutes figure for this table).
 2. Aggregate turnaround time (receipt to verification - there's no per-stage
    timestamp in the real data, so only the *aggregate* shape can be checked,
    not individual stage assumptions) against normal/lognormal/gamma, picking
@@ -361,6 +364,17 @@ def nhpp_review(rows: list[RealResultRow], interarrival: InterarrivalFit) -> NHP
     )
 
 
+def _configured_mean_interarrival_minutes(config: SimulationConfig, sample_type: SampleType) -> float:
+    """SampleTypeProfile.arrivals_per_day_by_weekday (model v1+) replaced a
+    single constant-rate mean with real day-of-week rates - converts the
+    week-average of those rates back into an equivalent mean-minutes figure
+    so this module's "configured mean" column keeps meaning what it always
+    meant, without needing this module to know about day-of-week itself."""
+    rates = config.sample_type_profiles[sample_type].arrivals_per_day_by_weekday
+    avg_rate_per_day = sum(rates.values()) / 7
+    return 1440.0 / avg_rate_per_day if avg_rate_per_day else float("inf")
+
+
 def _configured_organism_pct(config: SimulationConfig, sample_type: SampleType) -> dict[Organism, float]:
     weights = config.sample_type_profiles[sample_type].organism_weights
     total = sum(weights.values())
@@ -378,9 +392,7 @@ def summarize_group(
     n_positive = len(positive_rows)
 
     mapped = _MAPPED_TYPE_BY_GROUP.get(group)
-    configured_mean = (
-        config.sample_type_profiles[mapped].mean_interarrival_minutes if mapped else None
-    )
+    configured_mean = _configured_mean_interarrival_minutes(config, mapped) if mapped else None
     configured_positive_pct = (
         100 * config.sample_type_profiles[mapped].positive_probability if mapped else None
     )

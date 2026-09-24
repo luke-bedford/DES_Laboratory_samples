@@ -1,4 +1,5 @@
 from lab_sim import (
+    MODEL_VERSION,
     SimulationConfig,
     plot_distribution_checks,
     plot_stage_time_distributions,
@@ -8,6 +9,7 @@ from lab_sim import (
 
 
 def main() -> None:
+    print(f"=== Model {MODEL_VERSION} ===")
     config = SimulationConfig()
     stats = run_simulation(config)
     stats.print_report()

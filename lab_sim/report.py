@@ -1,7 +1,7 @@
 import os
 from statistics import mean, median
 
-from .config import SimulationConfig
+from .config import MODEL_VERSION, SimulationConfig
 from .entities import Gender, Sample, SampleType
 from .plotting import stage_time_params
 from .stats import StatsCollector
@@ -369,7 +369,7 @@ def render_html_report(
 </head>
 <body>
 <div class="wrap">
-  <h1>Lab simulation summary</h1>
+  <h1>Lab simulation summary <span style="color:{_INK_MUTED}; font-weight:400;">&middot; model {MODEL_VERSION}</span></h1>
   <div class="subtitle">
     {config.warmup_minutes / 60 / 24:.1f}-day warm-up (not recorded) followed by a
     {config.sim_duration_minutes / 60 / 24:.1f}-day observation window (seed {config.random_seed})
