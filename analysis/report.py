@@ -1,11 +1,11 @@
 """Renders the real-data distribution-fit analysis to a standalone HTML
-report. Visual style duplicated from lab_sim/report.py rather than imported
-(same precedent that module already set for lab_sim/plotting.py's palette).
+report. Visual style duplicated from lab_sim/v1/report.py rather than imported
+(same precedent that module already set for lab_sim/v1/plotting.py's palette).
 """
 
 import os
 
-from lab_sim.entities import Organism
+from lab_sim.v1.entities import Organism
 from .distribution_fits import DAY_ORDER, GroupSummary
 from .load_real_data import ANALYSIS_GROUPS
 

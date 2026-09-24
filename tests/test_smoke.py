@@ -1,4 +1,4 @@
-from lab_sim import SimulationConfig, run_simulation
+from lab_sim.v1 import SimulationConfig, run_simulation
 
 
 def test_short_run_completes_and_reports_samples():

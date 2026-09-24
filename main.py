@@ -1,4 +1,4 @@
-from lab_sim import (
+from lab_sim.v1 import (
     MODEL_VERSION,
     SimulationConfig,
     plot_distribution_checks,

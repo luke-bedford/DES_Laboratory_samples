@@ -1,25 +1,13 @@
-from .config import MODEL_VERSION, SampleTypeProfile, SimulationConfig
-from .entities import Gender, Organism, Patient, Priority, Sample, SampleType
-from .plotting import plot_distribution_checks, plot_stage_time_distributions
-from .report import render_html_report
-from .resources import LabResources
-from .stats import StatsCollector
-from .simulation import run_simulation
+"""NHS microbiology lab sample flow simulation.
 
-__all__ = [
-    "MODEL_VERSION",
-    "SimulationConfig",
-    "SampleTypeProfile",
-    "Sample",
-    "SampleType",
-    "Priority",
-    "Patient",
-    "Gender",
-    "Organism",
-    "LabResources",
-    "StatsCollector",
-    "run_simulation",
-    "plot_distribution_checks",
-    "plot_stage_time_distributions",
-    "render_html_report",
-]
+This package holds one complete, independent implementation per model
+version - see CHANGES.md in this directory for what changed between
+versions and why. There is no implicit "latest" import from the top
+level; pick a version explicitly, e.g.:
+
+    from lab_sim.v1 import SimulationConfig, run_simulation
+
+lab_sim.v0 is a frozen snapshot of the original 6-specimen-type,
+constant-rate-Poisson model (tagged `model-v0` in git). lab_sim.v1 is
+the current 20-specimen-type, day-of-week NHPP model.
+"""

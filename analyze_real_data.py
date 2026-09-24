@@ -1,4 +1,4 @@
-from lab_sim import SimulationConfig
+from lab_sim.v1 import SimulationConfig
 
 from analysis.distribution_fits import day_of_week_counts, summarize_all
 from analysis.load_real_data import DEFAULT_DATA_PATH, load_rows, unmapped_type_counts

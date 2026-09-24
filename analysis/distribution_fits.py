@@ -18,6 +18,12 @@ lab_sim.config.SimulationConfig's current SampleTypeProfile values, for the 6
 modeled types.
 
 Nothing here writes to lab_sim/config.py - this module only reports.
+
+This module is coupled to lab_sim.v1 specifically: Organism and SampleType are
+distinct enum classes per model-version subfolder, so passing a
+lab_sim.v0.SimulationConfig here would silently produce empty/zero organism
+and positivity comparisons (dict lookups keyed by the wrong enum class) rather
+than raising an error.
 """
 
 from __future__ import annotations
@@ -28,8 +34,8 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import stats
 
-from lab_sim.config import SimulationConfig
-from lab_sim.entities import Organism, SampleType
+from lab_sim.v1.config import SimulationConfig
+from lab_sim.v1.entities import Organism, SampleType
 from .load_real_data import ANALYSIS_GROUPS, RealResultRow, SPECIMEN_TYPE_MAP
 from .organism_mapping import map_organism
 

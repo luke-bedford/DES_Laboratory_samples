@@ -1,6 +1,6 @@
 """Maps a real result's free-text organism name to the simulation's
-Organism enum (see lab_sim/entities.py). Anything that doesn't match a known
-substring maps to Organism.OTHER.
+Organism enum (see lab_sim/v1/entities.py). Anything that doesn't match a
+known substring maps to Organism.OTHER.
 
 Match order matters: species-specific entries (e.g. "pseudomonas
 aeruginosa") must come before the genus-level fallback for the same genus
@@ -8,7 +8,7 @@ aeruginosa") must come before the genus-level fallback for the same genus
 first match.
 """
 
-from lab_sim.entities import Organism
+from lab_sim.v1.entities import Organism
 
 _ORGANISM_SUBSTRINGS: list[tuple[str, Organism]] = [
     ("escherichia coli", Organism.ESCHERICHIA_COLI),

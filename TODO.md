@@ -4,7 +4,7 @@
       not the moment the physical sample reaches the lab - there can be a queueing/batching
       delay between the two that the current data can't see. This matters in two ways: the
       `analysis/` inter-arrival gaps (fitted against `SampleTypeProfile.mean_interarrival_minutes`,
-      which models the simulation's true physical arrival process in `lab_sim/arrivals.py`) are
+      which models the simulation's true physical arrival process in `lab_sim/v1/arrivals.py`) are
       really inter-*booking-in* gaps - staff-paced, not a clean external process - which is a
       much better-grounded explanation for the overdispersion the day-of-week NHPP/Weibull
       review couldn't fully explain (see `diagnostics/real_data_fit_report.html`) than
@@ -23,5 +23,5 @@
 - [ ] Extract patient demographic data (age, gender, ...) alongside the specimen results.
       The real dataset currently has no patient-level fields at all, so the positivity/organism
       comparisons in `analysis/` can't be cross-checked against `lab_sim`'s age/gender
-      positivity modifiers (`lab_sim/patients.py`, `SimulationConfig.elderly_age_threshold`
+      positivity modifiers (`lab_sim/v1/patients.py`, `SimulationConfig.elderly_age_threshold`
       etc.) the way specimen type already can be.

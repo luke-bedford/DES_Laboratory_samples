@@ -9,7 +9,7 @@ IMPORTANT: anon_received is the sample's booking-in time (when reception logs
 it on the LIS), not the moment the physical sample reaches the lab - see
 TODO.md. Anything derived from received_days (inter-arrival gaps, the
 day-of-week NHPP review) is really describing the booking-in process, not the
-true external arrival process lab_sim/arrivals.py models; turnaround
+true external arrival process lab_sim/v1/arrivals.py models; turnaround
 (verified - received) likewise excludes whatever wait happens before
 booking-in.
 """
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import openpyxl
 
-from lab_sim.entities import SampleType
+from lab_sim.v1.entities import SampleType
 
 DEFAULT_DATA_PATH = Path("Data/Received_sample_data/Received_sample_data.xlsx")
 
