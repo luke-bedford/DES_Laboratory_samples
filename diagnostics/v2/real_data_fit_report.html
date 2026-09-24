@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Real data distribution fits</title>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #fcfcfb;
+    color: #0b0b0b;
+    margin: 0;
+    padding: 32px 24px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .subtitle { color: #52514e; margin-bottom: 24px; }
+  h2 { font-size: 1.05rem; margin: 32px 0 10px; color: #0b0b0b; }
+  h3 { font-size: 0.9rem; margin: 20px 0 8px; color: #0b0b0b; }
+  code { background: #f0efea; padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+  table {
+    width: 100%; border-collapse: collapse; background: #fff;
+    border: 1px solid #e1e0d9; border-radius: 8px; overflow: hidden;
+    font-size: 0.85rem;
+  }
+  th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid #e1e0d9; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: #52514e; font-weight: 600; background: #f5f4f1; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #f9f8f5; }
+  .table-scroll { overflow-x: auto; }
+  footer { margin-top: 32px; color: #898781; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Real data vs. simulation assumptions</h1>
+  <div class="subtitle">
+    67212 rows from Data/Received_sample_data, spanning 77.6 days.
+    "Real data" analysis only - nothing here has been written back to lab_sim/v2/config.py.
+    Turnaround here is booking-in-to-verification only; the dataset has no per-stage
+    timestamps, so individual process-stage assumptions (reception, plating, incubation,
+    ...) can't be validated, only the aggregate shape. <strong>anon_received is when the
+    sample is booked in at reception, not when it physically reaches the lab</strong> (see
+    TODO.md) - so "inter-arrival gap" below really means inter-booking-in gap, and
+    turnaround excludes whatever wait happens before booking-in.
+  </div>
+
+  <h2>Inter-arrival fit (Poisson-arrival assumption)</h2>
+  <p class="subtitle" style="margin-top:-4px;">Real mean gap between booking-in events vs. the configured SampleTypeProfile mean (which models lab_sim/v2/arrivals.py's true physical arrival process), and a K-S test against an exponential distribution fitted to the real gaps. A low K-S stat / high p-value supports the exponential (Poisson-arrival) assumption.</p>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Gaps (n)</th><th>Real mean inter-arrival</th><th>Configured mean</th><th>K-S stat vs. exponential</th></tr></thead><tbody><tr><td>Blood Culture</td><td>5844</td><td>18.8 min</td><td>14.3 min</td><td>0.684 (p=0.000)</td></tr><tr><td>Tissue</td><td>481</td><td>3.8 h</td><td>3.3 h</td><td>0.504 (p=0.000)</td></tr><tr><td>Urine</td><td>9987</td><td>11.2 min</td><td>43.0 min</td><td>0.598 (p=0.000)</td></tr><tr><td>Swab</td><td>22593</td><td>4.9 min</td><td>18.7 min</td><td>0.623 (p=0.000)</td></tr><tr><td>Stool</td><td>3852</td><td>28.5 min</td><td>111.4 min</td><td>0.728 (p=0.000)</td></tr><tr><td>Sputum</td><td>3253</td><td>33.7 min</td><td>2.1 h</td><td>0.757 (p=0.000)</td></tr><tr><td>Multi-Site</td><td>12929</td><td>8.6 min</td><td>—</td><td>0.766 (p=0.000)</td></tr></tbody></table></div>
+
+  <h2>Turnaround time fit (aggregate shape)</h2>
+  <p class="subtitle" style="margin-top:-4px;">Best-fit distribution among normal/lognormal/gamma, selected by AIC, fitted to booking-in-to-verification time pooled across positive and negative results.</p>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Completed (n)</th><th>Mean</th><th>Median</th><th>Best-fit distribution (AIC-selected)</th><th>K-S stat vs. best fit</th></tr></thead><tbody><tr><td>Blood Culture</td><td>7517</td><td>123.3 h</td><td>120.2 h</td><td>lognormal (0.24, 1.93, 116.97)</td><td>0.433 (p=0.000)</td></tr><tr><td>Tissue</td><td>501</td><td>329.8 h</td><td>192.8 h</td><td>gamma (0.81, 43.04, 351.1)</td><td>0.123 (p=0.000)</td></tr><tr><td>Urine</td><td>10239</td><td>64.7 h</td><td>52.1 h</td><td>lognormal (1.07, 18.97, 28.91)</td><td>0.132 (p=0.000)</td></tr><tr><td>Swab</td><td>23347</td><td>55.3 h</td><td>46.7 h</td><td>lognormal (0.59, -0.11, 45.92)</td><td>0.139 (p=0.000)</td></tr><tr><td>Stool</td><td>3930</td><td>72.3 h</td><td>69.3 h</td><td>lognormal (0.33, -1.85, 69.7)</td><td>0.111 (p=0.000)</td></tr><tr><td>Sputum</td><td>3278</td><td>107.1 h</td><td>64.2 h</td><td>lognormal (0.78, 26.39, 46.99)</td><td>0.142 (p=0.000)</td></tr><tr><td>Multi-Site</td><td>16021</td><td>29.2 h</td><td>25.3 h</td><td>lognormal (0.97, 20.08, 5.53)</td><td>0.031 (p=0.000)</td></tr></tbody></table></div>
+
+  <h2>Turnaround time: positive vs. negative</h2>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Positive (n)</th><th>Positive mean</th><th>Positive median</th><th>Negative (n)</th><th>Negative mean</th><th>Negative median</th></tr></thead><tbody><tr><td>Blood Culture</td><td>700</td><td>90.5 h</td><td>79.1 h</td><td>6817</td><td>126.7 h</td><td>120.2 h</td></tr><tr><td>Tissue</td><td>354</td><td>208.0 h</td><td>171.1 h</td><td>147</td><td>623.1 h</td><td>550.8 h</td></tr><tr><td>Urine</td><td>5097</td><td>93.9 h</td><td>92.1 h</td><td>5142</td><td>35.8 h</td><td>31.3 h</td></tr><tr><td>Swab</td><td>6828</td><td>85.7 h</td><td>74.2 h</td><td>16519</td><td>42.8 h</td><td>29.5 h</td></tr><tr><td>Stool</td><td>224</td><td>100.7 h</td><td>91.8 h</td><td>3706</td><td>70.6 h</td><td>68.6 h</td></tr><tr><td>Sputum</td><td>1470</td><td>109.8 h</td><td>80.3 h</td><td>1808</td><td>105.0 h</td><td>56.7 h</td></tr><tr><td>Multi-Site</td><td>191</td><td>80.7 h</td><td>71.6 h</td><td>15830</td><td>28.6 h</td><td>25.2 h</td></tr></tbody></table></div>
+
+  <h2>Positivity rate: real vs. configured</h2>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Rows (n)</th><th>Positive (n)</th><th>Real % positive</th><th>Configured % positive</th></tr></thead><tbody><tr><td>Blood Culture</td><td>7517</td><td>700</td><td>9.3%</td><td>9.3%</td></tr><tr><td>Tissue</td><td>501</td><td>354</td><td>70.7%</td><td>70.7%</td></tr><tr><td>Urine</td><td>10239</td><td>5097</td><td>49.8%</td><td>49.8%</td></tr><tr><td>Swab</td><td>23347</td><td>6828</td><td>29.2%</td><td>29.2%</td></tr><tr><td>Stool</td><td>3930</td><td>224</td><td>5.7%</td><td>5.7%</td></tr><tr><td>Sputum</td><td>3278</td><td>1470</td><td>44.8%</td><td>44.8%</td></tr><tr><td>Multi-Site</td><td>16021</td><td>191</td><td>1.2%</td><td>—</td></tr></tbody></table></div>
+
+  <h2>Organism mix: real vs. configured</h2>
+  <p class="subtitle" style="margin-top:-4px;">Real organism text is matched to the model's Organism enum by substring (see analysis/organism_mapping.py); anything unmatched falls under Other.</p>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Organism</th><th>Real count</th><th>Real % of positives</th><th>Configured %</th></tr></thead><tbody><tr><td>Blood Culture</td><td>Other</td><td>251</td><td>35.9%</td><td>35.9%</td></tr><tr><td>Blood Culture</td><td>Escherichia Coli</td><td>114</td><td>16.3%</td><td>16.3%</td></tr><tr><td>Blood Culture</td><td>Staphylococcus Epidermidis</td><td>110</td><td>15.7%</td><td>15.7%</td></tr><tr><td>Blood Culture</td><td>Staphylococcus Aureus</td><td>76</td><td>10.9%</td><td>10.9%</td></tr><tr><td>Blood Culture</td><td>Klebsiella Pneumoniae</td><td>37</td><td>5.3%</td><td>5.3%</td></tr><tr><td>Blood Culture</td><td>Enterococcus Spp</td><td>34</td><td>4.9%</td><td>4.9%</td></tr><tr><td>Blood Culture</td><td>Pseudomonas Aeruginosa</td><td>22</td><td>3.1%</td><td>3.1%</td></tr><tr><td>Blood Culture</td><td>Candida Spp</td><td>10</td><td>1.4%</td><td>1.4%</td></tr><tr><td>Blood Culture</td><td>Enterobacter Hormaechei</td><td>9</td><td>1.3%</td><td>1.3%</td></tr><tr><td>Blood Culture</td><td>Klebsiella Oxytoca</td><td>9</td><td>1.3%</td><td>1.3%</td></tr><tr><td>Blood Culture</td><td>Streptococcus Dysgalactiae</td><td>7</td><td>1.0%</td><td>1.0%</td></tr><tr><td>Blood Culture</td><td>Proteus Spp</td><td>7</td><td>1.0%</td><td>1.0%</td></tr><tr><td>Blood Culture</td><td>Streptococcus Agalactiae</td><td>6</td><td>0.9%</td><td>0.9%</td></tr><tr><td>Blood Culture</td><td>Citrobacter Koseri</td><td>5</td><td>0.7%</td><td>0.7%</td></tr><tr><td>Blood Culture</td><td>Pseudomonas Spp</td><td>3</td><td>0.4%</td><td>0.4%</td></tr><tr><td>Tissue</td><td>Other</td><td>101</td><td>28.5%</td><td>28.5%</td></tr><tr><td>Tissue</td><td>Staphylococcus Aureus</td><td>97</td><td>27.4%</td><td>27.4%</td></tr><tr><td>Tissue</td><td>Escherichia Coli</td><td>28</td><td>7.9%</td><td>7.9%</td></tr><tr><td>Tissue</td><td>Pseudomonas Aeruginosa</td><td>23</td><td>6.5%</td><td>6.5%</td></tr><tr><td>Tissue</td><td>Staphylococcus Epidermidis</td><td>21</td><td>5.9%</td><td>5.9%</td></tr><tr><td>Tissue</td><td>Candida Spp</td><td>20</td><td>5.6%</td><td>5.7%</td></tr><tr><td>Tissue</td><td>Trichophyton Rubrum</td><td>19</td><td>5.4%</td><td>5.4%</td></tr><tr><td>Tissue</td><td>Enterobacter Hormaechei</td><td>13</td><td>3.7%</td><td>3.7%</td></tr><tr><td>Tissue</td><td>Proteus Spp</td><td>7</td><td>2.0%</td><td>2.0%</td></tr><tr><td>Tissue</td><td>Mixed Skin Flora</td><td>6</td><td>1.7%</td><td>1.7%</td></tr><tr><td>Tissue</td><td>Enterococcus Spp</td><td>6</td><td>1.7%</td><td>1.7%</td></tr><tr><td>Tissue</td><td>Mixed Gram Negative Flora</td><td>5</td><td>1.4%</td><td>1.4%</td></tr><tr><td>Tissue</td><td>Klebsiella Pneumoniae</td><td>3</td><td>0.8%</td><td>0.9%</td></tr><tr><td>Tissue</td><td>Streptococcus Agalactiae</td><td>2</td><td>0.6%</td><td>0.6%</td></tr><tr><td>Tissue</td><td>Citrobacter Koseri</td><td>2</td><td>0.6%</td><td>0.6%</td></tr><tr><td>Tissue</td><td>Streptococcus Dysgalactiae</td><td>1</td><td>0.3%</td><td>0.3%</td></tr><tr><td>Urine</td><td>Escherichia Coli</td><td>2496</td><td>49.0%</td><td>49.0%</td></tr><tr><td>Urine</td><td>Enterococcus Spp</td><td>521</td><td>10.2%</td><td>10.2%</td></tr><tr><td>Urine</td><td>Other</td><td>476</td><td>9.3%</td><td>9.3%</td></tr><tr><td>Urine</td><td>Klebsiella Pneumoniae</td><td>371</td><td>7.3%</td><td>7.3%</td></tr><tr><td>Urine</td><td>Proteus Spp</td><td>229</td><td>4.5%</td><td>4.5%</td></tr><tr><td>Urine</td><td>Heavy Mixed Growth</td><td>204</td><td>4.0%</td><td>4.0%</td></tr><tr><td>Urine</td><td>Candida Spp</td><td>157</td><td>3.1%</td><td>3.1%</td></tr><tr><td>Urine</td><td>Pseudomonas Spp</td><td>150</td><td>2.9%</td><td>2.9%</td></tr><tr><td>Urine</td><td>Citrobacter Koseri</td><td>123</td><td>2.4%</td><td>2.4%</td></tr><tr><td>Urine</td><td>Enterobacter Hormaechei</td><td>87</td><td>1.7%</td><td>1.7%</td></tr><tr><td>Urine</td><td>Staphylococcus Epidermidis</td><td>70</td><td>1.4%</td><td>1.4%</td></tr><tr><td>Urine</td><td>Pseudomonas Aeruginosa</td><td>67</td><td>1.3%</td><td>1.3%</td></tr><tr><td>Urine</td><td>Klebsiella Oxytoca</td><td>67</td><td>1.3%</td><td>1.3%</td></tr><tr><td>Urine</td><td>Staphylococcus Aureus</td><td>46</td><td>0.9%</td><td>0.9%</td></tr><tr><td>Urine</td><td>Streptococcus Agalactiae</td><td>31</td><td>0.6%</td><td>0.6%</td></tr><tr><td>Urine</td><td>Streptococcus Dysgalactiae</td><td>2</td><td>0.0%</td><td>0.0%</td></tr><tr><td>Swab</td><td>Candida Spp</td><td>1671</td><td>24.5%</td><td>24.5%</td></tr><tr><td>Swab</td><td>Staphylococcus Aureus</td><td>1538</td><td>22.5%</td><td>22.5%</td></tr><tr><td>Swab</td><td>Mixed Skin Flora</td><td>1527</td><td>22.4%</td><td>22.4%</td></tr><tr><td>Swab</td><td>Other</td><td>439</td><td>6.4%</td><td>6.4%</td></tr><tr><td>Swab</td><td>Mixed Gram Negative Flora</td><td>377</td><td>5.5%</td><td>5.5%</td></tr><tr><td>Swab</td><td>Streptococcus Agalactiae</td><td>320</td><td>4.7%</td><td>4.7%</td></tr><tr><td>Swab</td><td>Pseudomonas Aeruginosa</td><td>304</td><td>4.5%</td><td>4.5%</td></tr><tr><td>Swab</td><td>Escherichia Coli</td><td>161</td><td>2.4%</td><td>2.4%</td></tr><tr><td>Swab</td><td>Streptococcus Dysgalactiae</td><td>116</td><td>1.7%</td><td>1.7%</td></tr><tr><td>Swab</td><td>Enterococcus Spp</td><td>83</td><td>1.2%</td><td>1.2%</td></tr><tr><td>Swab</td><td>Klebsiella Pneumoniae</td><td>76</td><td>1.1%</td><td>1.1%</td></tr><tr><td>Swab</td><td>Enterobacter Hormaechei</td><td>72</td><td>1.1%</td><td>1.1%</td></tr><tr><td>Swab</td><td>Pseudomonas Spp</td><td>38</td><td>0.6%</td><td>0.6%</td></tr><tr><td>Swab</td><td>Proteus Spp</td><td>32</td><td>0.5%</td><td>0.5%</td></tr><tr><td>Swab</td><td>Klebsiella Oxytoca</td><td>25</td><td>0.4%</td><td>0.4%</td></tr><tr><td>Swab</td><td>Citrobacter Koseri</td><td>22</td><td>0.3%</td><td>0.3%</td></tr><tr><td>Swab</td><td>Staphylococcus Epidermidis</td><td>17</td><td>0.2%</td><td>0.3%</td></tr><tr><td>Swab</td><td>Haemophilus Influenzae</td><td>9</td><td>0.1%</td><td>0.1%</td></tr><tr><td>Swab</td><td>Heavy Mixed Growth</td><td>1</td><td>0.0%</td><td>0.0%</td></tr><tr><td>Stool</td><td>Other</td><td>167</td><td>74.6%</td><td>74.6%</td></tr><tr><td>Stool</td><td>Escherichia Coli</td><td>57</td><td>25.4%</td><td>25.4%</td></tr><tr><td>Sputum</td><td>Candida Spp</td><td>448</td><td>30.5%</td><td>30.5%</td></tr><tr><td>Sputum</td><td>Pseudomonas Aeruginosa</td><td>298</td><td>20.3%</td><td>20.3%</td></tr><tr><td>Sputum</td><td>Other</td><td>269</td><td>18.3%</td><td>18.3%</td></tr><tr><td>Sputum</td><td>Haemophilus Influenzae</td><td>144</td><td>9.8%</td><td>9.8%</td></tr><tr><td>Sputum</td><td>Staphylococcus Aureus</td><td>87</td><td>5.9%</td><td>5.9%</td></tr><tr><td>Sputum</td><td>Pseudomonas Spp</td><td>48</td><td>3.3%</td><td>3.3%</td></tr><tr><td>Sputum</td><td>Mixed Gram Negative Flora</td><td>45</td><td>3.1%</td><td>3.1%</td></tr><tr><td>Sputum</td><td>Escherichia Coli</td><td>38</td><td>2.6%</td><td>2.6%</td></tr><tr><td>Sputum</td><td>Klebsiella Pneumoniae</td><td>30</td><td>2.0%</td><td>2.0%</td></tr><tr><td>Sputum</td><td>Proteus Spp</td><td>18</td><td>1.2%</td><td>1.2%</td></tr><tr><td>Sputum</td><td>Enterobacter Hormaechei</td><td>15</td><td>1.0%</td><td>1.0%</td></tr><tr><td>Sputum</td><td>Citrobacter Koseri</td><td>13</td><td>0.9%</td><td>0.9%</td></tr><tr><td>Sputum</td><td>Klebsiella Oxytoca</td><td>10</td><td>0.7%</td><td>0.7%</td></tr><tr><td>Sputum</td><td>Streptococcus Agalactiae</td><td>7</td><td>0.5%</td><td>0.5%</td></tr><tr><td>Multi-Site</td><td>Staphylococcus Aureus</td><td>191</td><td>100.0%</td><td>—</td></tr></tbody></table></div>
+
+  <h2>Arrivals by day of week</h2>
+  <p class="subtitle" style="margin-top:-4px;">Descriptive only - see the inter-arrival distribution review below for how this feeds the simulation's day-of-week + hour-of-day NHPP arrival model.</p>
+  <div class="table-scroll"><table><thead><tr><th>Day received</th><th>Rows</th><th>%</th></tr></thead><tbody><tr><td>Monday</td><td>9591</td><td>14%</td></tr><tr><td>Tuesday</td><td>10505</td><td>16%</td></tr><tr><td>Wednesday</td><td>11516</td><td>17%</td></tr><tr><td>Thursday</td><td>10160</td><td>15%</td></tr><tr><td>Friday</td><td>9653</td><td>14%</td></tr><tr><td>Saturday</td><td>8723</td><td>13%</td></tr><tr><td>Sunday</td><td>7064</td><td>11%</td></tr></tbody></table></div>
+
+  <h2>Specimen types not yet modeled</h2>
+  <p class="subtitle" style="margin-top:-4px;">Present in the real data but not in SampleType and not analyzed above.</p>
+  <div class="table-scroll"><table><thead><tr><th>Specimen type</th><th>Rows</th></tr></thead><tbody><tr><td>Nail</td><td>657</td></tr><tr><td>Body Fluid</td><td>380</td></tr><tr><td>Breast milk</td><td>352</td></tr><tr><td>Broncho-alveolar Lavage</td><td>268</td></tr><tr><td>Environmental</td><td>208</td></tr><tr><td>Stem Cells</td><td>184</td></tr><tr><td>Drain - Tube - Other device</td><td>137</td></tr><tr><td>Fluid</td><td>51</td></tr><tr><td>Post mortem swab</td><td>42</td></tr><tr><td>Cerebrospinal Fluid</td><td>25</td></tr><tr><td>Synovial Fluid</td><td>22</td></tr><tr><td>Hair</td><td>22</td></tr><tr><td>Dialysis fluid</td><td>15</td></tr><tr><td>Transport solution</td><td>8</td></tr><tr><td>Other</td><td>3</td></tr><tr><td>Vitreous humor</td><td>2</td></tr><tr><td>Aspirate</td><td>1</td></tr><tr><td>Tissue - Post mortem</td><td>1</td></tr><tr><td>Tissue - Biopsy</td><td>1</td></tr></tbody></table></div>
+
+  <h2>Inter-arrival distribution review: day-of-week and hour-of-day NHPP, Weibull, and what the data actually supports</h2>
+  <p class="subtitle" style="margin-top:-4px;">
+    The day-of-week table above shows arrival rate varies significantly by weekday for every
+    group. This review now also uses <code>received_hour</code>, a directly-extracted,
+    reliable hour-of-day field (0-23) added in a later data export - unlike
+    <code>anon_received</code>'s fractional-day component, which is not anchored to true
+    midnight and was never usable for this. Three candidate rate models are compared below:
+    a non-homogeneous Poisson process (NHPP) with a piecewise-constant day-of-week rate (as
+    before), the same but with a finer joint (weekday, hour) rate, and a Weibull fit to the
+    raw gaps.
+  </p>
+  <p class="subtitle" style="margin-top:-4px;">
+    Both NHPP grains were tested properly, not just asserted: each row's rate (arrivals per
+    day, or per hour-slot for the finer model - both using an exact denominator, the number of
+    distinct calendar days/hours actually labeled with that weekday or weekday+hour in the
+    window, not occurrences&times;24h or &times;168h, since a ~78-day window doesn't divide
+    evenly) defines a piecewise-constant rate function, and the <em>time-rescaling theorem</em>
+    converts each real inter-arrival gap into a rescaled interval that should be i.i.d. Exp(1)
+    if that rate model is right. Unlike the raw exponential K-S stat (which fits its rate from
+    the same data), neither rescaled K-S test has a fitted parameter, so both are genuine
+    tests.
+  </p>
+  <p class="subtitle" style="margin-top:-4px;">
+    <strong>The result: hour-of-day correction helps substantially more than day-of-week alone,
+    but doesn't fully explain the gaps either.</strong> Day+hour-rescaled K-S stats drop
+    noticeably below the day-of-week-only ones for every busy group (see the table below) -
+    hour-of-day is a real, worthwhile signal, not noise. But the single most informative number
+    here still doesn't move where full resolution would predict: a Weibull shape fit to the
+    day+hour-rescaled gaps stays close to the day-of-week-rescaled shape (both cluster around
+    0.4-0.5 across every group) instead of collapsing toward 1. If day+hour rate variation were
+    the whole story, that shape would have moved to 1 after rescaling. It didn't, for any group.
+    The Q-Q plots below show the same thing visually: the bottom (day+hour-rescaled) panel sits
+    closer to the diagonal than the middle (day-of-week-only) panel, but both still show the
+    same S-shaped deviation the raw panel does, just compressed.
+  </p>
+  <p class="subtitle" style="margin-top:-4px;">
+    That residual - confirmed independently by the index-of-dispersion table below, 5-50&times;
+    a homogeneous Poisson process at every group - is consistent with the explanation this
+    review already had: <code>anon_received</code> is when a sample is
+    <strong>booked in at reception</strong>, not when it physically arrives at the lab (see
+    TODO.md), so every gap fitted above is really an inter-booking-in gap. Booking-in is a
+    staff-paced LIS-logging step, not the external process generating physical specimens - of
+    course it doesn't look like a clean Poisson process at any rate grain; it looks like
+    reception throughput. Hour-of-day rate variation was one real, measurable piece of that
+    throughput pattern (staff are busier at some hours than others) and is now worth encoding
+    directly; the remainder plausibly reflects batching/logging behavior no smooth rate
+    function - at any grain - would explain away. A hyperexponential/mixture-of-exponentials
+    model was also considered, but it's mathematically a discrete-rate mixture without tracking
+    <em>when</em> each rate applies, so it shares the same blind spot to intra-day structure
+    the day-of-week-only NHPP had - the day+hour rates already computed make a separate fit
+    redundant for this review.
+  </p>
+  <p class="subtitle" style="margin-top:-4px;">
+    <strong>Recommendation:</strong> encode the joint day-of-week + hour-of-day rate in the
+    simulation (model v2 does: <code>lab_sim/v2/arrivals.py</code>, calibrated from
+    <code>hour_rates_per_hour</code> below) - it's real, statistically confirmed to help more
+    than day-of-week alone, and factors cleanly into the existing per-weekday rate times an
+    hourly shape. But don't expect it to fully resolve the exponential K-S rejection on its
+    own, since the gaps it's being tested against are booking-in gaps, not
+    <code>lab_sim/v2/arrivals.py</code>'s modeled physical-arrival process, and the residual
+    Weibull shape (~0.4-0.5) is essentially unchanged by either rate correction. Replacing the
+    NHPP's exponential gap distribution with a Weibull one within each bucket - a materially
+    different renewal-process model, not a rate-function tweak - remains a real option for a
+    future version if the residual overdispersion needs to be modeled directly rather than
+    left as a documented limitation; not implemented in v2, since it's a bigger architectural
+    change than adding a rate grain and wasn't asked for this pass. Getting a
+    booking-in-to-verification split that isolates true physical arrival time is still the
+    bigger remaining lever.
+  </p>
+
+  <h3>Day-of-week arrival rate (arrivals/day, exact-occurrence denominator)</h3>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead><tbody><tr><td>Blood Culture</td><td>96.8</td><td>110.2</td><td>113.4</td><td>106.7</td><td>128.2</td><td>81.4</td><td>67.7</td></tr><tr><td>Tissue</td><td>9.2</td><td>10.7</td><td>9.0</td><td>6.8</td><td>6.7</td><td>5.7</td><td>2.7</td></tr><tr><td>Urine</td><td>122.9</td><td>127.3</td><td>109.0</td><td>195.8</td><td>151.6</td><td>124.8</td><td>107.1</td></tr><tr><td>Swab</td><td>303.2</td><td>293.6</td><td>480.9</td><td>264.2</td><td>358.3</td><td>251.1</td><td>199.7</td></tr><tr><td>Stool</td><td>38.1</td><td>50.7</td><td>63.1</td><td>43.4</td><td>65.7</td><td>63.8</td><td>37.3</td></tr><tr><td>Sputum</td><td>37.7</td><td>61.0</td><td>58.0</td><td>37.5</td><td>49.5</td><td>54.9</td><td>20.1</td></tr><tr><td>Multi-Site</td><td>223.0</td><td>214.4</td><td>267.7</td><td>245.0</td><td>143.8</td><td>216.1</td><td>144.7</td></tr></tbody></table></div>
+
+  <h3>Hour-of-day arrival rate (arrivals/hour-slot, averaged across weekdays)</h3>
+  <p class="subtitle" style="margin-top:-4px;">
+    Descriptive shape only - the K-S/Weibull checks below use the full 168-cell (weekday, hour)
+    rate grid, not this weekday-averaged view.
+  </p>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>00</th><th>01</th><th>02</th><th>03</th><th>04</th><th>05</th><th>06</th><th>07</th><th>08</th><th>09</th><th>10</th><th>11</th><th>12</th><th>13</th><th>14</th><th>15</th><th>16</th><th>17</th><th>18</th><th>19</th><th>20</th><th>21</th><th>22</th><th>23</th></tr></thead><tbody><tr><td>Blood Culture</td><td>9.35</td><td>9.63</td><td>9.05</td><td>10.26</td><td>8.55</td><td>6.58</td><td>8.35</td><td>13.37</td><td>10.71</td><td>12.59</td><td>9.40</td><td>11.84</td><td>10.56</td><td>12.24</td><td>13.07</td><td>10.67</td><td>8.16</td><td>15.85</td><td>13.11</td><td>12.85</td><td>11.94</td><td>12.69</td><td>11.00</td><td>11.34</td></tr><tr><td>Tissue</td><td>0.57</td><td>0.29</td><td>2.62</td><td>0.64</td><td>0.50</td><td>0.18</td><td>0.57</td><td>2.22</td><td>2.49</td><td>3.25</td><td>2.00</td><td>3.73</td><td>1.04</td><td>1.57</td><td>0.29</td><td>2.17</td><td>1.21</td><td>2.14</td><td>0.43</td><td>1.29</td><td>0.00</td><td>0.14</td><td>0.14</td><td>0.43</td></tr><tr><td>Urine</td><td>4.90</td><td>0.57</td><td>6.57</td><td>9.36</td><td>15.00</td><td>16.43</td><td>0.93</td><td>12.08</td><td>17.00</td><td>22.45</td><td>13.51</td><td>18.61</td><td>15.80</td><td>11.74</td><td>20.08</td><td>17.92</td><td>13.70</td><td>8.92</td><td>13.50</td><td>10.19</td><td>11.67</td><td>6.69</td><td>0.71</td><td>9.36</td></tr><tr><td>Swab</td><td>11.00</td><td>8.33</td><td>5.52</td><td>14.14</td><td>10.25</td><td>7.57</td><td>20.43</td><td>34.78</td><td>39.03</td><td>43.92</td><td>39.21</td><td>48.06</td><td>28.77</td><td>35.66</td><td>24.61</td><td>22.75</td><td>22.05</td><td>11.91</td><td>20.83</td><td>1.93</td><td>8.07</td><td>9.93</td><td>5.43</td><td>14.32</td></tr><tr><td>Stool</td><td>0.00</td><td>0.14</td><td>5.57</td><td>7.71</td><td>3.71</td><td>0.14</td><td>7.29</td><td>11.68</td><td>11.72</td><td>9.65</td><td>6.30</td><td>11.29</td><td>8.83</td><td>11.64</td><td>8.51</td><td>11.08</td><td>2.33</td><td>4.86</td><td>5.64</td><td>0.00</td><td>0.29</td><td>0.57</td><td>0.29</td><td>0.29</td></tr><tr><td>Sputum</td><td>12.83</td><td>12.12</td><td>18.62</td><td>16.09</td><td>12.90</td><td>6.83</td><td>11.79</td><td>13.76</td><td>13.84</td><td>14.21</td><td>4.08</td><td>4.14</td><td>1.50</td><td>5.17</td><td>2.15</td><td>0.79</td><td>4.33</td><td>5.86</td><td>4.71</td><td>8.43</td><td>4.71</td><td>4.71</td><td>3.71</td><td>1.43</td></tr><tr><td>Multi-Site</td><td>41.38</td><td>8.64</td><td>19.57</td><td>26.50</td><td>46.10</td><td>14.00</td><td>10.29</td><td>1.86</td><td>45.24</td><td>52.81</td><td>49.82</td><td>44.64</td><td>37.69</td><td>45.33</td><td>32.93</td><td>37.03</td><td>52.80</td><td>38.82</td><td>56.43</td><td>10.14</td><td>11.75</td><td>16.29</td><td>1.43</td><td>23.90</td></tr></tbody></table></div>
+
+  <h3>Raw vs. day-of-week-rescaled vs. day+hour-rescaled K-S test</h3>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Raw K-S vs. exponential (fitted rate)</th><th>Day-of-week-rescaled K-S vs. Exp(1)</th><th>Day+hour-rescaled K-S vs. Exp(1)</th><th>Ties dropped (day+hour)</th></tr></thead><tbody><tr><td>Blood Culture</td><td>0.684</td><td>0.654</td><td>0.489</td><td>1672</td></tr><tr><td>Tissue</td><td>0.504</td><td>0.486</td><td>0.267</td><td>19</td></tr><tr><td>Urine</td><td>0.598</td><td>0.589</td><td>0.351</td><td>251</td></tr><tr><td>Swab</td><td>0.623</td><td>0.610</td><td>0.384</td><td>753</td></tr><tr><td>Stool</td><td>0.728</td><td>0.715</td><td>0.463</td><td>77</td></tr><tr><td>Sputum</td><td>0.757</td><td>0.740</td><td>0.372</td><td>24</td></tr><tr><td>Multi-Site</td><td>0.766</td><td>0.746</td><td>0.538</td><td>3092</td></tr></tbody></table></div>
+
+  <h3>Weibull fit: raw gaps vs. rescaled gaps</h3>
+  <p class="subtitle" style="margin-top:-4px;">
+    Shape &lt; 1 on the raw gaps is expected under time-varying Poisson rates (a mixture of
+    exponentials is itself over-dispersed) and isn't evidence of genuine renewal-process
+    structure on its own - the rescaled columns are the ones that test whether day-of-week, or
+    day+hour, explain it away.
+  </p>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Raw Weibull shape</th><th>Raw AIC improvement over exponential</th><th>Day-rescaled Weibull shape</th><th>Day-rescaled AIC improvement over Exp(1)</th><th>Day+hour-rescaled Weibull shape</th><th>Day+hour-rescaled AIC improvement over Exp(1)</th></tr></thead><tbody><tr><td>Blood Culture</td><td>0.41</td><td>17,361</td><td>0.41</td><td>17,979</td><td>0.42</td><td>30,689</td></tr><tr><td>Tissue</td><td>0.38</td><td>1,211</td><td>0.38</td><td>1,159</td><td>0.46</td><td>2,786</td></tr><tr><td>Urine</td><td>0.46</td><td>27,728</td><td>0.46</td><td>27,690</td><td>0.49</td><td>28,101</td></tr><tr><td>Swab</td><td>0.47</td><td>65,593</td><td>0.47</td><td>65,207</td><td>0.52</td><td>49,744</td></tr><tr><td>Stool</td><td>0.39</td><td>14,938</td><td>0.39</td><td>14,823</td><td>0.44</td><td>15,099</td></tr><tr><td>Sputum</td><td>0.40</td><td>13,468</td><td>0.40</td><td>13,283</td><td>0.45</td><td>22,142</td></tr><tr><td>Multi-Site</td><td>0.38</td><td>71,697</td><td>0.37</td><td>72,209</td><td>0.40</td><td>108,501</td></tr></tbody></table></div>
+
+  <h3>Index of dispersion</h3>
+  <div class="table-scroll"><table><thead><tr><th>Group</th><th>Index of dispersion (daily counts)</th></tr></thead><tbody><tr><td>Blood Culture</td><td>12.7</td></tr><tr><td>Tissue</td><td>5.1</td></tr><tr><td>Urine</td><td>31.0</td></tr><tr><td>Swab</td><td>50.7</td></tr><tr><td>Stool</td><td>13.6</td></tr><tr><td>Sputum</td><td>25.5</td></tr><tr><td>Multi-Site</td><td>41.8</td></tr></tbody></table></div>
+
+  <h3>Q-Q plots: raw exponential vs. day-of-week-rescaled vs. day+hour-rescaled</h3>
+  <img src="real_data_interarrival_qq.png" alt="Inter-arrival Q-Q plots" style="max-width:100%; border:1px solid #e1e0d9; border-radius: 8px;">
+
+  <footer>analysis.report.render_html_report</footer>
+</div>
+</body>
+</html>

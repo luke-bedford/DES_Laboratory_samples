@@ -15,6 +15,7 @@ from .distribution_fits import (
     TURNAROUND_CANDIDATES,
     interarrival_gaps_minutes,
     time_rescale_gaps,
+    time_rescale_gaps_hourly,
 )
 from .load_real_data import ANALYSIS_GROUPS, RealResultRow, rows_by_group
 
@@ -156,25 +157,27 @@ def _qq_exponential(ax, sample: np.ndarray, scale: float) -> None:
 def render_interarrival_qq_plots(
     rows: list[RealResultRow],
     summaries: dict[str, GroupSummary],
-    output_path: str = "diagnostics/v1/real_data_interarrival_qq.png",
+    output_path: str = "diagnostics/v2/real_data_interarrival_qq.png",
 ) -> str:
     """Q-Q plots for the exponential inter-arrival fits: top row is the raw
     pooled gaps against an exponential at the fitted rate (same fit as the
-    histogram overlay in render_distribution_plots); bottom row is the same
+    histogram overlay in render_distribution_plots); middle row is the same
     arrivals after day-of-week NHPP time-rescaling (see
-    distribution_fits.time_rescale_gaps) against Exp(1) - the "does
-    correcting for day-of-week explain the curvature" comparison."""
+    distribution_fits.time_rescale_gaps) against Exp(1); bottom row is the
+    same arrivals after the finer joint (weekday, hour) NHPP time-rescaling
+    (distribution_fits.time_rescale_gaps_hourly) - "does correcting for
+    day-of-week, then day-of-week-and-hour, explain the curvature"."""
 
     grouped = rows_by_group(rows)
     n = len(ANALYSIS_GROUPS)
 
-    fig, axes = plt.subplots(2, n, figsize=(2.6 * n, 6.0))
+    fig, axes = plt.subplots(3, n, figsize=(2.6 * n, 9.0))
     fig.patch.set_facecolor(_SURFACE)
 
     for col, group in enumerate(ANALYSIS_GROUPS):
         summary = summaries[group]
         rows_for_group = grouped[group]
-        ax_top, ax_bottom = axes[0, col], axes[1, col]
+        ax_top, ax_mid, ax_bottom = axes[0, col], axes[1, col], axes[2, col]
 
         raw_gaps = interarrival_gaps_minutes(rows_for_group)
         mean_minutes = summary.interarrival.real_mean_minutes
@@ -188,23 +191,34 @@ def render_interarrival_qq_plots(
         rescaled, _ = time_rescale_gaps(rows_for_group, summary.nhpp.day_rates_per_day)
         rescaled = rescaled[rescaled > 0]
         if len(rescaled) >= 5:
-            _qq_exponential(ax_bottom, rescaled, 1.0)
+            _qq_exponential(ax_mid, rescaled, 1.0)
+        else:
+            _no_data_qq(ax_mid)
+        ax_mid.set_xlabel("theoretical, Exp(1) (day-of-week rescaled)", fontsize=7.5)
+
+        hour_rescaled, _ = time_rescale_gaps_hourly(rows_for_group, summary.nhpp.hour_rates_per_hour)
+        hour_rescaled = hour_rescaled[hour_rescaled > 0]
+        if len(hour_rescaled) >= 5:
+            _qq_exponential(ax_bottom, hour_rescaled, 1.0)
         else:
             _no_data_qq(ax_bottom)
-        ax_bottom.set_xlabel("theoretical, Exp(1) (day-of-week rescaled)", fontsize=7.5)
+        ax_bottom.set_xlabel("theoretical, Exp(1) (day+hour rescaled)", fontsize=7.5)
 
         _style_axes(ax_top)
+        _style_axes(ax_mid)
         _style_axes(ax_bottom)
 
     axes[0, 0].set_ylabel("observed (min)", fontsize=9)
     axes[1, 0].set_ylabel("observed (rescaled)", fontsize=9)
+    axes[2, 0].set_ylabel("observed (rescaled)", fontsize=9)
 
     fig.suptitle(
-        "Inter-arrival Q-Q: raw exponential fit (top) vs. day-of-week NHPP "
-        "time-rescaled (bottom) - points on the diagonal support the model",
+        "Inter-arrival Q-Q: raw exponential fit (top) vs. day-of-week (middle) "
+        "vs. day+hour (bottom) NHPP time-rescaled - points on the diagonal "
+        "support the model",
         color=_INK_PRIMARY, fontsize=10.5, y=0.99,
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     fig.savefig(output_path, dpi=150, facecolor=_SURFACE)
@@ -215,7 +229,7 @@ def render_interarrival_qq_plots(
 def render_distribution_plots(
     rows: list[RealResultRow],
     summaries: dict[str, GroupSummary],
-    output_path: str = "diagnostics/v1/real_data_distribution_fits.png",
+    output_path: str = "diagnostics/v2/real_data_distribution_fits.png",
 ) -> str:
     grouped = rows_by_group(rows)
     n = len(ANALYSIS_GROUPS)

@@ -6,16 +6,16 @@ testing, and reporting.
 
 **Model versions**: each model version is a complete, independent package under its own
 subfolder - `lab_sim/v0/` (the original 6-specimen-type, constant-rate-Poisson model, also
-tagged `model-v0` in git) and `lab_sim/v1/` (the current model, `lab_sim.v1.MODEL_VERSION`),
-which covers every real specimen type with a count over 20 in the real dataset (20
-`SampleType`s total) and replaces constant-rate arrivals with a day-of-week non-homogeneous
-Poisson process (NHPP) calibrated from that same dataset - see the Arrivals section below and
-`lab_sim/v1/entities.py`'s `SampleType` docstring. There is no implicit "current" version at
-the top of the package; every import states its version explicitly
-(`from lab_sim.v1 import ...`). See `lab_sim/CHANGES.md` for what changed between versions
-and why. Each version is runnable standalone: `python -m lab_sim.v1` (or `python main.py`,
-equivalent) runs the current model, `python -m lab_sim.v0` runs the frozen snapshot - each
-writes its own diagnostics to `diagnostics/<version>/`.
+tagged `model-v0` in git), `lab_sim/v1/` (20-specimen-type, day-of-week NHPP arrivals), and
+`lab_sim/v2/` (the current model, `lab_sim.v2.MODEL_VERSION` - adds hour-of-day to the NHPP
+rate, using a reliably-extracted `received_hour` real-data field v1 didn't have) - see the
+Arrivals section below and `lab_sim/v2/entities.py`'s `SampleType` docstring. There is no
+implicit "current" version at the top of the package; every import states its version
+explicitly (`from lab_sim.v2 import ...`). See `lab_sim/CHANGES.md` for what changed between
+versions and why. Each version is runnable standalone: `python -m lab_sim.v2` (or
+`python main.py`, equivalent) runs the current model, `python -m lab_sim.v1` /
+`python -m lab_sim.v0` run earlier frozen snapshots - each writes its own diagnostics to
+`diagnostics/<version>/`.
 
 ## Narrative: how the simulation behaves
 
@@ -23,7 +23,7 @@ writes its own diagnostics to `diagnostics/<version>/`.
 > entity, resource, process step, or distribution changes, so it stays a true account of
 > what `python main.py` actually does rather than what it did when first written.
 
-**Entities** (`lab_sim/v1/entities.py`). A `Sample` is generated from a unique `Patient` (id,
+**Entities** (`lab_sim/v2/entities.py`). A `Sample` is generated from a unique `Patient` (id,
 `age`, `Gender`) — see Background/Microbiology Context, which notes that for now each
 sample comes from its own patient. Each sample carries an id, a `SampleType` (20 members as
 of model v1 — every real specimen type with a count over 20 in the real dataset, plus an
@@ -34,7 +34,7 @@ is resolved partway through the journey, an `Organism` (set only if positive), a
 `timestamps` dict that gets a new entry every time the sample changes stage. Turnaround
 time is simply `reported - arrival_time`.
 
-**Resources** (`lab_sim/v1/resources.py`) model the three staff groups from
+**Resources** (`lab_sim/v2/resources.py`) model the three staff groups from
 Background/Microbiology Context, plus shared equipment, as `simpy.Resource` pools — plain
 FIFO queues with no priority ordering: HSSW (7) who receive/book in, accession, plate, and
 set up susceptibility testing; BMS (4) who read plates and susceptibilities and enter
@@ -50,33 +50,39 @@ a subculture onto a plate, so the follow-up incubation always draws from the pla
 sample currently occupies exactly one plate-incubator slot per incubation stage
 (`config.plates_per_sample = 1`); real samples are plated onto several media types at once
 and will eventually need to consume several slots concurrently — see the comment on
-`plates_per_sample` in `lab_sim/v1/config.py`.
+`plates_per_sample` in `lab_sim/v2/config.py`.
 
-**Arrivals** (`lab_sim/v1/arrivals.py`). Each `SampleType` runs its own independent arrival
-process, and as of model v1 that process is a **day-of-week non-homogeneous Poisson process
-(NHPP)**, not a constant-rate one — the real dataset shows every specimen type's arrival rate
-depends significantly on weekday (see `diagnostics/v1/real_data_fit_report.html`'s day-of-week
-section), so each `SampleTypeProfile.arrivals_per_day_by_weekday` holds seven real,
-calibrated arrivals-per-day figures (Monday–Sunday) instead of one placeholder mean.
-Simulated via Lewis-Shedler **thinning**: candidate inter-arrival gaps are drawn at the
-week's max rate (the envelope), and each candidate is accepted with probability
-`current_weekday_rate / max_rate` — a rejected candidate simply doesn't spawn a sample and
-the loop continues. This exactly reproduces a piecewise-constant-rate NHPP, unlike drawing a
-fresh exponential at "today's" rate each time, which would only approximate it once a gap can
-straddle a rate-change boundary. Simulated time `t=0` is anchored to Monday by convention.
-Blood culture, tissue, and most of the newly-added types arrive one at a time; urine, swabs,
-stool, sputum, and multi-site arrive in batches (`batch_size_range`, default 2–6 samples per
-arrival event, each from a different patient) — multi-site's batching is a modeling choice,
-not a real-data finding (the real dataset has no episode linkage to confirm actual batch
-sizes), and its calibrated event rate is coupled to `batch_size_range` as a result. Every
-rate, batch size, and the priority split live in `SimulationConfig` (`lab_sim/v1/config.py`).
+**Arrivals** (`lab_sim/v2/arrivals.py`). Each `SampleType` runs its own independent arrival
+process, and as of model v2 that process is a **day-of-week × hour-of-day non-homogeneous
+Poisson process (NHPP)**, not a constant-rate one — the real dataset shows every specimen
+type's arrival rate depends significantly on both weekday and hour of day (see
+`diagnostics/v2/real_data_fit_report.html`'s day-of-week and hour-of-day sections). The rate
+is factorized: `SampleTypeProfile.arrivals_per_day_by_weekday[weekday]` (seven real,
+calibrated arrivals-per-day figures, unchanged since v1) times
+`SampleTypeProfile.hourly_fraction_of_day[hour]` (24 real, calibrated fractions of a day's
+volume, summing to 1.0 - new in v2, calibrated from the real dataset's `received_hour`
+field) - a deliberate independence simplification, not a fully joint 168-value calibration;
+see the field's docstring in `config.py` for the weekday/weekend-shape check that justified
+it. Simulated via Lewis-Shedler **thinning**: candidate inter-arrival gaps are drawn at the
+joint max rate (the envelope, `max(day_rates) * max(hourly_fractions)`), and each candidate
+is accepted with probability `current_rate / envelope` — a rejected candidate simply doesn't
+spawn a sample and the loop continues. This exactly reproduces a piecewise-constant-rate
+NHPP, unlike drawing a fresh exponential at "now"'s rate each time, which would only
+approximate it once a gap can straddle a rate-change boundary. Simulated time `t=0` is
+anchored to Monday 00:00 by convention. Blood culture, tissue, and most of the newly-added
+types arrive one at a time; urine, swabs, stool, sputum, and multi-site arrive in batches
+(`batch_size_range`, default 2–6 samples per arrival event, each from a different patient) —
+multi-site's batching is a modeling choice, not a real-data finding (the real dataset has no
+episode linkage to confirm actual batch sizes), and its calibrated event rate is coupled to
+`batch_size_range` as a result. Every rate, hourly shape, batch size, and the priority split
+live in `SimulationConfig` (`lab_sim/v2/config.py`).
 
-**Patients** (`lab_sim/v1/patients.py`). Each new sample's patient gets an age (Gaussian,
+**Patients** (`lab_sim/v2/patients.py`). Each new sample's patient gets an age (Gaussian,
 clipped to a configurable range) and a gender (weighted categorical draw). These feed into
 positivity — see below — per Background/Microbiology Context's note that patient age and
 gender "influence sample positivity rate."
 
-**The journey** (`lab_sim/v1/processes.py`) is a strict sequence of resource requests, with
+**The journey** (`lab_sim/v2/processes.py`) is a strict sequence of resource requests, with
 every service duration drawn from `random.gauss(mean, stdev)` and floored at 0.1 minutes:
 
 1. **Reception, accessioning, plating** — one HSSW holds all three steps back to back,
@@ -86,7 +92,7 @@ every service duration drawn from `random.gauss(mean, stdev)` and floored at 0.1
    total turnaround time.
 3. **Reading** — a BMS, ~5 min (sd 2). This is also the moment `is_culture_positive` is
    resolved, as a Bernoulli draw against that sample type's `positive_probability`
-   (`SampleTypeProfile`, `lab_sim/v1/config.py`), adjusted by the patient's gender and age
+   (`SampleTypeProfile`, `lab_sim/v2/config.py`), adjusted by the patient's gender and age
    (elderly/young multipliers). If positive, an `Organism` is drawn from that sample
    type's `organism_weights`.
 4. **If positive only** — an HSSW sets up susceptibility testing on an identification
@@ -99,18 +105,19 @@ every service duration drawn from `random.gauss(mean, stdev)` and floored at 0.1
    system, ~5 min (sd 2), after which the sample is marked `reported` and handed to
    `StatsCollector.record_completion`.
 
-**Distributional assumptions in one place:** interarrival times follow a day-of-week NHPP per
-sample type (exponential within each weekday's constant rate, thinned against the week's max —
-see Arrivals above), every service duration is Gaussian, the 85/15 priority split and
+**Distributional assumptions in one place:** interarrival times follow a day-of-week ×
+hour-of-day NHPP per sample type (exponential within each hour's constant rate, thinned
+against the joint max — see Arrivals above), every service duration is Gaussian, the 85/15
+priority split and
 each patient's gender are categorical draws, patient age is a clipped Gaussian, and culture
 positivity is a per-sample-type Bernoulli trial modulated by patient gender/age, with the
 resulting organism (if positive) a per-sample-type categorical draw. All of it lives in
-`SimulationConfig` / `SampleTypeProfile` (`lab_sim/v1/config.py`) rather than scattered
+`SimulationConfig` / `SampleTypeProfile` (`lab_sim/v2/config.py`) rather than scattered
 through the process/arrival code. Nothing currently rejects or reneges — there's no queue
 capacity ceiling — so a `rejected_samples` bucket exists in `StatsCollector` but is always
 empty at present.
 
-**Warm-up period** (`lab_sim/v1/stats.py`, `lab_sim/v1/simulation.py`). Starting the clock from an
+**Warm-up period** (`lab_sim/v2/stats.py`, `lab_sim/v2/simulation.py`). Starting the clock from an
 empty lab and recording from `t=0` isn't representative of a real snapshot, where queues,
 incubators, and staff are already mid-flow. `run_simulation` therefore runs the clock for
 `config.warmup_minutes + config.sim_duration_minutes` in total (3 days + 3 days by default),
@@ -126,51 +133,56 @@ rather than the raw lists, so nothing needs its own warm-up logic. `stats.summar
 reports `arrivals_during_warmup` / `completions_during_warmup` so the warm-up's effect stays
 visible rather than silently discarded.
 
-**Emergent behavior at the current (v1) defaults**: with the v1 specimen-type expansion and
-scaled-up capacity (7,230 plate slots, 7 HSSW, 4 BMS, 2 clinical microbiologists), a 3-day
-warm-up followed by a 3-day observation window (seed 42) sees roughly 2,700 samples arrive —
-about 4x v0's ~690, consistent with the ~38% daily-volume increase compounding with a longer
-memory in the queueing system — but only around 57% of them (compared to v0's ~99%) complete
-within the 3-day window, and mean turnaround among those that do roughly doubles to ~58 hours
-(v0: ~24). This is a genuine finding, not a bug: capacity was scaled by the same ~38-45%
-factor as the added volume (see `SimulationConfig`'s Staffing comment), but queueing delay is
-nonlinear in utilization, and a 3-day window is barely 2-4x the ~18-34 hour minimum pipeline
-latency to begin with, so a bigger, busier system leaves proportionally more arrivals still
-mid-pipeline at the window's end. Positive-culture completions (213 in the seed-42 run) show
-up across every sample type, including the newly-added ones. `diagnostics/v1/distribution_checks.png`
-shows the day-of-week NHPP's effect directly: the flat Poisson overlay (now just the
-week-average rate, see `lab_sim/v1/plotting.py`) visibly diverges from bucketed arrival counts on
-particularly busy or quiet weekdays, which is expected now that arrivals are genuinely
-NHPP rather than constant-rate. With 20 sample types the plot is a wide 2×20 grid, and its
-shared per-row y-axis flattens sparse types (e.g. `OTHER`) next to high-volume ones (e.g.
-`SWAB`) — a known, accepted limitation, not redesigned as part of the v1 change.
+**Emergent behavior at the current (v2) defaults**: with v1's specimen-type expansion and
+scaled-up capacity (7,230 plate slots, 7 HSSW, 4 BMS, 2 clinical microbiologists), unchanged
+in v2, a 3-day warm-up followed by a 3-day observation window (seed 42) sees roughly 2,690
+samples arrive — close to v1's ~2,700 (same weekly volume, just redistributed within each
+day by v2's hour-of-day rates) and about 4x v0's ~690 — but only around 56% of them (v1: 57%;
+v0: ~99%) complete within the 3-day window, and mean turnaround among those that do is ~58
+hours (v1: ~58h; v0: ~24h). This is a genuine finding, not a bug: capacity was scaled by the
+same ~38-45% factor as v1's added volume (see `SimulationConfig`'s Staffing comment), but
+queueing delay is nonlinear in utilization, and a 3-day window is barely 2-4x the ~18-34 hour
+minimum pipeline latency to begin with, so a bigger, busier system leaves proportionally more
+arrivals still mid-pipeline at the window's end - v2's hour-of-day redistribution didn't
+meaningfully change this picture, which is itself informative: at this capacity the queue is
+driven more by weekly volume and pipeline latency than by how arrivals cluster within a day.
+Positive-culture completions (285 in the seed-42 run) show up across every sample type,
+including the newly-added ones. `diagnostics/v2/distribution_checks.png` shows the NHPP's
+effect directly: the flat Poisson overlay (now just the week-average rate, see
+`lab_sim/v2/plotting.py`) visibly diverges from bucketed arrival counts on particularly busy
+or quiet weekdays, which is expected now that arrivals are genuinely NHPP rather than
+constant-rate. With 20 sample types the plot is a wide 2×20 grid, and its shared per-row
+y-axis flattens sparse types (e.g. `OTHER`) next to high-volume ones (e.g. `SWAB`) — a known,
+accepted limitation, not redesigned as part of the v1 or v2 changes.
 
 ## Structure
 
-- `lab_sim/v1/config.py` — **the parameter file.** Every simulation parameter lives here:
-  the warm-up and observation window lengths, arrival rates and batch sizes, patient
-  age/gender distributions, staffing levels, process time distributions, and each sample
-  type's positivity/organism profile (`SampleTypeProfile`). Nothing that controls
-  simulation behavior should be hardcoded anywhere else.
-- `lab_sim/v1/entities.py` — the `Sample` and `Patient` entities and the `SampleType`,
+- `lab_sim/v2/config.py` — **the parameter file.** Every simulation parameter lives here:
+  the warm-up and observation window lengths, arrival rates/hourly shape and batch sizes,
+  patient age/gender distributions, staffing levels, process time distributions, and each
+  sample type's positivity/organism profile (`SampleTypeProfile`, including v2's new
+  `hourly_fraction_of_day`). Nothing that controls simulation behavior should be hardcoded
+  anywhere else.
+- `lab_sim/v2/entities.py` — the `Sample` and `Patient` entities and the `SampleType`,
   `Priority`, `Gender`, `Organism` enums.
-- `lab_sim/v1/resources.py` — shared SimPy resources (HSSW, BMS, clinical microbiologists,
+- `lab_sim/v2/resources.py` — shared SimPy resources (HSSW, BMS, clinical microbiologists,
   the blood-culture and plate incubator pools, identification analyzers).
-- `lab_sim/v1/patients.py` — draws a new patient's age and gender.
-- `lab_sim/v1/arrivals.py` — one independent day-of-week NHPP arrival process per sample type
-  (Lewis-Shedler thinning against `SampleTypeProfile.arrivals_per_day_by_weekday`); spawns
-  batches for batched types.
-- `lab_sim/v1/processes.py` — the sample's journey through each lab stage, including
+- `lab_sim/v2/patients.py` — draws a new patient's age and gender.
+- `lab_sim/v2/arrivals.py` — one independent day-of-week × hour-of-day NHPP arrival process
+  per sample type (Lewis-Shedler thinning against the factorized rate
+  `SampleTypeProfile.arrivals_per_day_by_weekday[weekday] *
+  SampleTypeProfile.hourly_fraction_of_day[hour]`); spawns batches for batched types.
+- `lab_sim/v2/processes.py` — the sample's journey through each lab stage, including
   positivity and organism resolution.
-- `lab_sim/v1/stats.py` — collects every sample's timestamps (warm-up included) and exposes
+- `lab_sim/v2/stats.py` — collects every sample's timestamps (warm-up included) and exposes
   `observed_arrivals()`/`observed_completions()`, which filter to the post-warm-up
   observation window; `summary()` reports turnaround times and organism counts from those.
-- `lab_sim/v1/plotting.py` — renders the arrival-count and turnaround-time diagnostic plots,
-  faceted by sample type, to `diagnostics/v1/distribution_checks.png`; also renders
-  `diagnostics/v1/stage_time_distributions.png`, one small panel per process stage plotting the
+- `lab_sim/v2/plotting.py` — renders the arrival-count and turnaround-time diagnostic plots,
+  faceted by sample type, to `diagnostics/v2/distribution_checks.png`; also renders
+  `diagnostics/v2/stage_time_distributions.png`, one small panel per process stage plotting the
   Gaussian PDF each stage's duration is actually drawn from (`SimulationConfig`'s `(mean,
   stdev)` pairs, floored at 0.1 minutes).
-- `lab_sim/v1/report.py` — renders a standalone HTML summary to `diagnostics/v1/summary_report.html`:
+- `lab_sim/v2/report.py` — renders a standalone HTML summary to `diagnostics/v2/summary_report.html`:
   arrival/completion counts and turnaround times and average per-phase durations by sample
   type, turnaround time and average per-phase durations compared between culture-positive
   and culture-negative samples, and patient demographics (gender split, age summary, and
@@ -178,7 +190,7 @@ shared per-row y-axis flattens sparse types (e.g. `OTHER`) next to high-volume o
   plots the per-stage service-time parameters behind every phase-duration figure above (the
   simulation's own assumptions - not fitted to anything, kept separate from `analysis/`'s
   real-data comparison since the real export has no per-stage timestamps to fit against).
-- `lab_sim/v1/simulation.py` — wires everything together and runs the simulation clock for
+- `lab_sim/v2/simulation.py` — wires everything together and runs the simulation clock for
   `warmup_minutes + sim_duration_minutes`.
 - `main.py` — entry point that runs a default simulation, prints a report, and writes the
   diagnostic plot and HTML summary.
@@ -187,20 +199,24 @@ shared per-row y-axis flattens sparse types (e.g. `OTHER`) next to high-volume o
 
 `Data/Received_sample_data/Received_sample_data.xlsx` is a real, anonymized export of
 ~67k specimen results (specimen type, organism/result, booking-in and verification time,
-day of week) from an actual microbiology lab. `analysis/` fits the simulation's
-distributional assumptions against it — as a standalone, read-only comparison; `analysis/`
-itself never writes to `lab_sim/v1/config.py` at runtime (it can't - `Data/` is gitignored and
-not guaranteed to exist for every checkout). Its *outputs* have, however, been hand-transcribed
-into `lab_sim/v1/config.py` as static calibrated values on several occasions since (organism
-mix, then the full v1 arrival-rate/positivity/organism recalibration across all 20 sample
-types) - see the `model-v0` git tag for the pre-calibration baseline. `analysis/` itself still
-covers only the original 6 modeled types + Multi-site, not the full v1 20-type set; extending
-it is a natural follow-up, not yet done. Note that the export's
+day of week, and - since a later re-extraction - hour of day) from an actual microbiology
+lab. `analysis/` fits the simulation's distributional assumptions against it — as a
+standalone, read-only comparison; `analysis/` itself never writes to `lab_sim/v2/config.py`
+at runtime (it can't - `Data/` is gitignored and not guaranteed to exist for every checkout).
+Its *outputs* have, however, been hand-transcribed into `lab_sim/v2/config.py` as static
+calibrated values on several occasions since (organism mix, then the full v1
+arrival-rate/positivity/organism recalibration across all 20 sample types, then v2's
+hour-of-day arrival shape) - see the `model-v0` git tag for the pre-calibration baseline.
+`analysis/` itself still covers only the original 6 modeled types + Multi-site, not the full
+20-type set; extending it is a natural follow-up, not yet done. Note that the export's
 `anon_received` timestamp is when the sample is **booked in** at reception, not when it
 physically reaches the lab (see `TODO.md`) — so the inter-arrival gaps `analysis/` fits
-against `lab_sim/v1/arrivals.py`'s Poisson assumption are really inter-booking-in gaps,
+against `lab_sim/v2/arrivals.py`'s Poisson assumption are really inter-booking-in gaps,
 staff-paced rather than a clean external process, and turnaround (verified − received)
-excludes whatever wait happens before booking-in.
+excludes whatever wait happens before booking-in. `received_hour`, unlike
+`anon_received`'s fractional-day component, is a reliable, directly-extracted true
+hour-of-day - see `analysis/load_real_data.py`'s module docstring for the discovered
+(and unused) constant 3-hour offset between the two.
 
 - `analysis/load_real_data.py` — loads and cleans the raw export: maps 6 of its specimen
   types onto `SampleType` (`Blood`→`BLOOD_CULTURE`, `Tissue`→`TISSUE`, `Urine`→`URINE`,
@@ -214,28 +230,36 @@ excludes whatever wait happens before booking-in.
   `Organism` enum by substring; anything else falls under `OTHER`. `Organism` was
   extended from its original 6-member placeholder set to every organism with a count
   over 100 in the real data (19 members total) - see the docstring on `Organism` in
-  `lab_sim/v1/entities.py`.
+  `lab_sim/v2/entities.py`.
 - `analysis/distribution_fits.py` — per group: fits an exponential to inter-arrival gaps
   and runs a K-S test against it (the Poisson-arrival assumption every
   `SampleTypeProfile.arrivals_per_day_by_weekday` rests on - as of model v1 that's a
   day-of-week NHPP rate rather than a single mean, so the "configured mean" comparison
-  converts the week-average back into an equivalent mean-minutes figure); fits
-  normal/lognormal/gamma to aggregate turnaround time (receipt to verification) and picks
-  the best by AIC; and compares real positivity rates and organism mixes against what's
-  currently configured, for the 6 original types (this module still covers only the
-  original 6 + Multi-site groups, not the full v1 20-type model - see Real data analysis
-  below). The real data has no per-stage timestamps, so only *aggregate* turnaround can be
-  checked this way — not individual stage assumptions (reception, plating, incubation, …).
+  converts the week-average back into an equivalent mean-minutes figure); computes both a
+  day-of-week rate (`day_of_week_rates`) and a joint (weekday, hour) rate
+  (`hour_of_day_rates`, using `received_hour` - v2 addition) and time-rescales gaps against
+  each (`time_rescale_gaps` / `time_rescale_gaps_hourly`) to test how much each rate grain
+  explains the real gaps' non-exponential shape; fits normal/lognormal/gamma to aggregate
+  turnaround time (receipt to verification) and picks the best by AIC; and compares real
+  positivity rates and organism mixes against what's currently configured, for the 6
+  original types (this module still covers only the original 6 + Multi-site groups, not the
+  full 20-type model - see Real data analysis below). The real data has no per-stage
+  timestamps, so only *aggregate* turnaround can be checked this way — not individual stage
+  assumptions (reception, plating, incubation, …).
 - `analysis/plots.py` / `analysis/report.py` — write
-  `diagnostics/v1/real_data_distribution_fits.png` (histogram + fitted-curve overlay per
+  `diagnostics/v2/real_data_distribution_fits.png` (histogram + fitted-curve overlay per
   group, axes independently scaled and clipped to the 99th percentile since arrival
   rates and turnaround spans differ by orders of magnitude between groups),
-  `diagnostics/v1/real_data_interarrival_qq.png` (log-log Q-Q plots per group: raw
-  exponential fit vs. the same gaps after day-of-week NHPP time-rescaling), and
-  `diagnostics/v1/real_data_fit_report.html` (the numeric tables, including a review of
-  candidate inter-arrival models - day-of-week NHPP via the time-rescaling theorem vs.
-  Weibull vs. index of dispersion - against the day-of-week effect the chi-square test
-  found), in the same visual style as `lab_sim/v1/plotting.py`/`lab_sim/v1/report.py`.
+  `diagnostics/v2/real_data_interarrival_qq.png` (log-log Q-Q plots per group, three rows:
+  raw exponential fit, day-of-week-rescaled, and day+hour-rescaled), and
+  `diagnostics/v2/real_data_fit_report.html` (the numeric tables, including a review of
+  candidate inter-arrival models - day-of-week and day+hour NHPP via the time-rescaling
+  theorem vs. Weibull vs. index of dispersion. The finding: hour-of-day correction reduces
+  the rescaled K-S statistic substantially further than day-of-week alone, so it's a real,
+  worthwhile signal - v2 uses it - but the rescaled Weibull shape stays ~0.4-0.5 either way,
+  so neither grain fully explains the gaps; the residual is consistent with `anon_received`
+  being a staff-paced booking-in timestamp rather than a smooth physical-arrival process),
+  in the same visual style as `lab_sim/v2/plotting.py`/`lab_sim/v2/report.py`.
 - `analyze_real_data.py` — entry point (`python analyze_real_data.py`).
 
 ## Usage

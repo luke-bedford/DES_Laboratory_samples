@@ -8,10 +8,19 @@ assumptions - see the plan this analysis was built from for the reasoning.
 IMPORTANT: anon_received is the sample's booking-in time (when reception logs
 it on the LIS), not the moment the physical sample reaches the lab - see
 TODO.md. Anything derived from received_days (inter-arrival gaps, the
-day-of-week NHPP review) is really describing the booking-in process, not the
-true external arrival process lab_sim/v1/arrivals.py models; turnaround
-(verified - received) likewise excludes whatever wait happens before
-booking-in.
+day-of-week/hour-of-day NHPP review) is really describing the booking-in
+process, not the true external arrival process lab_sim/v2/arrivals.py
+models; turnaround (verified - received) likewise excludes whatever wait
+happens before booking-in.
+
+received_hour is a reliable, directly-extracted hour-of-day (0-23) field -
+unlike anon_received's fractional-day component, which is NOT anchored to
+true midnight (see TODO.md's now-resolved item on this) and should not be
+used to derive hour-of-day. For the record: the two are related by a
+constant 3-hour offset for ~99% of rows (received_hour = floor(anon_received
+fractional hour) + 3, mod 24; the other ~1% is a floor/rounding edge case at
+hour boundaries) - noted here only because it's a real, discovered
+relationship, not because anything in this module relies on it.
 """
 
 from __future__ import annotations
@@ -21,7 +30,7 @@ from pathlib import Path
 
 import openpyxl
 
-from lab_sim.v1.entities import SampleType
+from lab_sim.v2.entities import SampleType
 
 DEFAULT_DATA_PATH = Path("Data/Received_sample_data/Received_sample_data.xlsx")
 
@@ -67,6 +76,7 @@ class RealResultRow:
     verified_days: float
     turnaround_days: float
     day_of_week: str
+    received_hour: int  # 0-23, true time-of-day - see module docstring
 
 
 def _is_interim(result: str) -> bool:
@@ -108,14 +118,24 @@ def load_rows(path: Path = DEFAULT_DATA_PATH) -> list[RealResultRow]:
         result = record.get("result")
         received = record.get("anon_received")
         verified = record.get("anon_verified")
-        if not specimen_type or not result or received is None or verified is None:
+        received_hour = record.get("received_hour")
+        if (
+            not specimen_type
+            or not result
+            or received is None
+            or verified is None
+            or received_hour is None
+        ):
             continue
         if _is_interim(str(result)):
             continue
         try:
             received_days = float(received)
             verified_days = float(verified)
+            received_hour = int(received_hour)
         except (TypeError, ValueError):
+            continue
+        if not 0 <= received_hour <= 23:
             continue
 
         mapped = SPECIMEN_TYPE_MAP.get(specimen_type)
@@ -138,6 +158,7 @@ def load_rows(path: Path = DEFAULT_DATA_PATH) -> list[RealResultRow]:
                 verified_days=verified_days,
                 turnaround_days=verified_days - received_days,
                 day_of_week=str(record.get("day_received") or ""),
+                received_hour=received_hour,
             )
         )
     return rows

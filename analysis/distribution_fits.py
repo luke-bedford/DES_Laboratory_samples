@@ -19,11 +19,19 @@ modeled types.
 
 Nothing here writes to lab_sim/config.py - this module only reports.
 
-This module is coupled to lab_sim.v1 specifically: Organism and SampleType are
+This module is coupled to lab_sim.v2 specifically: Organism and SampleType are
 distinct enum classes per model-version subfolder, so passing a
 lab_sim.v0.SimulationConfig here would silently produce empty/zero organism
 and positivity comparisons (dict lookups keyed by the wrong enum class) rather
 than raising an error.
+
+The day-of-week NHPP review below (day_of_week_rates/time_rescale_gaps) is
+now joined by an hour-of-day version (hour_of_day_rates/
+time_rescale_gaps_hourly), using the received_hour field - see
+load_real_data.py's module docstring on why that's reliable where
+anon_received's fractional-day component isn't. Both are kept, not one
+replacing the other, so the report can show the progression: raw gaps, then
+day-of-week-rescaled, then day-of-week-and-hour-rescaled.
 """
 
 from __future__ import annotations
@@ -34,8 +42,8 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import stats
 
-from lab_sim.v1.config import SimulationConfig
-from lab_sim.v1.entities import Organism, SampleType
+from lab_sim.v2.config import SimulationConfig
+from lab_sim.v2.entities import Organism, SampleType
 from .load_real_data import ANALYSIS_GROUPS, RealResultRow, SPECIMEN_TYPE_MAP
 from .organism_mapping import map_organism
 
@@ -94,13 +102,16 @@ class WeibullFit:
 
 @dataclass
 class NHPPReview:
-    """Day-of-week non-homogeneous Poisson process (NHPP) review for one
-    group's inter-arrival gaps - see day_of_week_rates/time_rescale_gaps/
-    fit_weibull below. raw_* fields describe the pooled gaps as already fit by
-    fit_interarrival; rescaled_* fields describe the same arrivals after
-    applying the time-rescaling theorem to the day-of-week rate model, which
-    should look like an Exp(1) process if that model explains the real gaps'
-    non-exponential shape."""
+    """Non-homogeneous Poisson process (NHPP) review for one group's
+    inter-arrival gaps, at two rate grains - see day_of_week_rates/
+    time_rescale_gaps and hour_of_day_rates/time_rescale_gaps_hourly/
+    fit_weibull below. raw_* fields describe the pooled gaps as already fit
+    by fit_interarrival; rescaled_* fields describe the same arrivals after
+    applying the time-rescaling theorem to the day-of-week rate model;
+    hour_rescaled_* fields do the same for the finer joint (weekday, hour)
+    rate model. Either rescaling should look like an Exp(1) process if that
+    grain of rate model fully explains the real gaps' non-exponential
+    shape."""
 
     day_rates_per_day: dict[str, float]
     day_occurrences: dict[str, int]
@@ -115,6 +126,13 @@ class NHPPReview:
     raw_weibull: WeibullFit
     rescaled_weibull: WeibullFit
     index_of_dispersion: float | None
+    hour_rates_per_hour: dict[tuple[str, int], float]
+    hour_rescaled_n: int
+    hour_rescaled_ties_dropped: int
+    hour_rescaled_ks_stat: float | None
+    hour_rescaled_ks_pvalue: float | None
+    hour_rescaled_exp1_aic: float | None
+    hour_weibull: WeibullFit
 
 
 @dataclass
@@ -318,6 +336,103 @@ def time_rescale_gaps(
     return rescaled, n_dropped
 
 
+def hour_of_day_rates(rows: list[RealResultRow]) -> dict[tuple[str, int], float]:
+    """Per-(weekday, hour) arrival rate (arrivals/hour-slot) for one group,
+    same exact-occurrence-denominator methodology as day_of_week_rates but
+    keyed by the joint (weekday, received_hour) label instead of just
+    weekday - both labels come directly from the dataset (day_received,
+    received_hour), so unlike day_of_week_rates's calendar-day occurrence
+    count, the calendar-hour occurrence count used here isn't approximate
+    either (received_hour is reliable - see load_real_data.py)."""
+
+    combo_for_calendar_hour: dict[int, tuple[str, int]] = {}
+    counts: Counter = Counter()
+    for r in rows:
+        if r.day_of_week not in DAY_ORDER:
+            continue
+        calendar_hour = int(np.floor(r.received_days * 24))
+        combo = (r.day_of_week, r.received_hour)
+        combo_for_calendar_hour[calendar_hour] = combo
+        counts[combo] += 1
+
+    occurrences = Counter(combo_for_calendar_hour.values())
+    return {
+        (day, hour): (counts[(day, hour)] / occurrences[(day, hour)]) if occurrences.get((day, hour)) else 0.0
+        for day in DAY_ORDER
+        for hour in range(24)
+    }
+
+
+def _weekday_hour_of_calendar_hour(
+    calendar_hour: int, anchor_hour: int, anchor_weekday: str, anchor_hour_of_day: int
+) -> tuple[str, int]:
+    offset = (calendar_hour - anchor_hour) % (24 * 7)
+    total = (DAY_ORDER.index(anchor_weekday) * 24 + anchor_hour_of_day + offset) % (24 * 7)
+    return DAY_ORDER[total // 24], total % 24
+
+
+def _integrate_hour_rate(
+    a: float,
+    b: float,
+    anchor_hour: int,
+    anchor_weekday: str,
+    anchor_hour_of_day: int,
+    hour_rates: dict[tuple[str, int], float],
+) -> float:
+    """Hour-granularity analogue of _integrate_rate: integral of the
+    piecewise-constant (weekday, hour) rate function between times a and b
+    (in days). a/b are converted to hour units (a_h, b_h) purely to make the
+    hour-boundary loop easy to index; hour_rates is in arrivals/hour-slot,
+    so each segment's contribution is rate * (segment length in hours) -
+    already a dimensionless expected-arrival-count, exactly like
+    _integrate_rate's rate-per-day * days, with no further conversion
+    needed (there is no "back to days" step - the compensator's value is a
+    count, not a duration, regardless of which unit the loop iterates in)."""
+    if b <= a:
+        return 0.0
+    a_h, b_h = a * 24, b * 24
+    first_hour = int(np.floor(a_h))
+    last_hour = int(np.floor(b_h - 1e-12))
+    total = 0.0
+    cursor = a_h
+    for calendar_hour in range(first_hour, last_hour + 1):
+        segment_end = min(calendar_hour + 1, b_h)
+        weekday, hour = _weekday_hour_of_calendar_hour(
+            calendar_hour, anchor_hour, anchor_weekday, anchor_hour_of_day
+        )
+        total += hour_rates[(weekday, hour)] * (segment_end - cursor)
+        cursor = segment_end
+    return total
+
+
+def time_rescale_gaps_hourly(
+    rows: list[RealResultRow], hour_rates: dict[tuple[str, int], float]
+) -> tuple[np.ndarray, int]:
+    """Hour-granularity analogue of time_rescale_gaps - applies the
+    time-rescaling theorem against the joint (weekday, hour) rate model
+    instead of day-of-week alone."""
+
+    valid_rows = [r for r in rows if r.day_of_week in DAY_ORDER]
+    if len(valid_rows) < 2:
+        return np.array([]), 0
+
+    anchor_hour = int(np.floor(valid_rows[0].received_days * 24))
+    anchor_weekday = valid_rows[0].day_of_week
+    anchor_hour_of_day = valid_rows[0].received_hour
+    times = np.sort(np.array([r.received_days for r in valid_rows]))
+
+    rescaled = np.array(
+        [
+            _integrate_hour_rate(
+                times[i - 1], times[i], anchor_hour, anchor_weekday, anchor_hour_of_day, hour_rates
+            )
+            for i in range(1, len(times))
+        ]
+    )
+    n_dropped = int(np.sum(rescaled <= 0))
+    return rescaled, n_dropped
+
+
 def index_of_dispersion(rows: list[RealResultRow], bucket_days: float = 1.0) -> float | None:
     """Variance-to-mean ratio of arrival counts in fixed daily bins - exactly
     1 in expectation for a homogeneous Poisson process at any binning, so a
@@ -353,6 +468,15 @@ def nhpp_review(rows: list[RealResultRow], interarrival: InterarrivalFit) -> NHP
     else:
         rescaled_ks_stat = rescaled_ks_pvalue = rescaled_exp1_aic = None
 
+    hour_rates = hour_of_day_rates(rows)
+    hour_rescaled_all, hour_n_dropped = time_rescale_gaps_hourly(rows, hour_rates)
+    hour_rescaled = hour_rescaled_all[hour_rescaled_all > 0]
+    if len(hour_rescaled) >= 5:
+        hour_rescaled_ks_stat, hour_rescaled_ks_pvalue = stats.kstest(hour_rescaled, "expon", args=(0, 1))
+        hour_rescaled_exp1_aic = _aic(stats.expon, (0, 1), hour_rescaled, k=0)
+    else:
+        hour_rescaled_ks_stat = hour_rescaled_ks_pvalue = hour_rescaled_exp1_aic = None
+
     return NHPPReview(
         day_rates_per_day=day_rates,
         day_occurrences=day_occurrences,
@@ -367,6 +491,13 @@ def nhpp_review(rows: list[RealResultRow], interarrival: InterarrivalFit) -> NHP
         raw_weibull=fit_weibull(raw_gaps),
         rescaled_weibull=fit_weibull(rescaled),
         index_of_dispersion=index_of_dispersion(rows),
+        hour_rates_per_hour=hour_rates,
+        hour_rescaled_n=len(hour_rescaled),
+        hour_rescaled_ties_dropped=hour_n_dropped,
+        hour_rescaled_ks_stat=float(hour_rescaled_ks_stat) if hour_rescaled_ks_stat is not None else None,
+        hour_rescaled_ks_pvalue=float(hour_rescaled_ks_pvalue) if hour_rescaled_ks_pvalue is not None else None,
+        hour_rescaled_exp1_aic=hour_rescaled_exp1_aic,
+        hour_weibull=fit_weibull(hour_rescaled),
     )
 
 
