@@ -13,7 +13,7 @@ Samples:
     There are a number of specimen types with different inter-arrival means. These will eventually be inferred from testing data
     Different sample types have a different probability distribution of being positive, with different organisms
     Each sample will come from a patient. For now each sample will come from a unique patient
-    Blood culture and tissue samples arrive as individual samples, urine, swabs, stool, and sputum arrive as batches
+    Blood culture, fluid and tissue samples arrive as individual samples. urine, swabs, stool, swabs, muti-site screens and sputum arrive as batches
 
 Capacity:
     Blood culture bottles incubate separately from other samples; the lab can incubate up to 2,200 blood culture bottles at once
@@ -27,3 +27,15 @@ Capacity:
 
 Workflow:
     Samples arrive in the laboratory reception as above and are booked into the system when HCCW are availably.
+    Blood cultures
+        Are loaded onto the incubator and left for up to 5 days.
+        If either blood culture bottle flags it will have a gram stain performed by the BMS, followed by incubation on a primary plate, along with direct susceptibility testing
+        The identification is performed 4hrs into incubation - the probability of a successful idenfication is dependent on the organism but can be modelled later
+        susceptibility testing is repeated from the primary plate. further susceptibility testing may be required for resistant organisms but this out of context for this model version
+    Urine cultures
+        Once received they loaded onto an automated cell counter. Samples with a WCC count of > 100 are cultured. Samples with <WCC are rejected unless the patient is pregnant, <12 years of age or from certain clinical areas.
+        Loading onto the cell counter, and inocculation of primary plates is performed by an HCCW
+        The following day the BMS will read the plates and any positives will have susceptibility testing
+        The subsequent day the BMS will read the susceptibilities.
+        CUH data suggests ~ 63.9 (SD 1.9%) of samples meet culture criteria.
+        Rejected samples are discarded after cell counting

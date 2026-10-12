@@ -26,8 +26,10 @@ _ORANGE = "#eb6834"
 STAGE_TIME_FIELDS: list[tuple[str, str]] = [
     ("Reception", "reception_time"),
     ("Accessioning", "accessioning_time"),
+    ("Cell counting", "cell_counting_time"),
     ("Plating", "plating_time"),
     ("Primary incubation", "incubation_time"),
+    ("Gram stain", "gram_stain_time"),
     ("Reading", "reading_time"),
     ("Susceptibility setup", "susceptibility_setup_time"),
     ("Sensitivity incubation", "sensitivity_incubation_time"),

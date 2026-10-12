@@ -12,8 +12,11 @@ from .stats import StatsCollector
 _PHASES: list[tuple[str, str, str]] = [
     ("Reception", "reception_start", "reception_end"),
     ("Accessioning", "accessioning_start", "accessioning_end"),
+    ("Cell counting", "cell_counting_start", "cell_counting_end"),
     ("Plating", "plating_start", "plating_end"),
     ("Primary incubation", "incubation_start", "incubation_end"),
+    ("Gram stain", "gram_stain_start", "gram_stain_end"),
+    ("Post-flag plate incubation", "post_flag_incubation_start", "post_flag_incubation_end"),
     ("Reading", "reading_start", "reading_end"),
     ("Susceptibility setup", "susceptibility_setup_start", "susceptibility_setup_end"),
     ("Sensitivity incubation", "sensitivity_incubation_start", "sensitivity_incubation_end"),
@@ -299,6 +302,38 @@ def _age_band_table(summary: dict, config: SimulationConfig) -> str:
     )
 
 
+def _replication_table(aggregate: dict) -> str:
+    _LABELS = {
+        "samples_arrived": "Samples arrived",
+        "samples_completed": "Samples completed",
+        "samples_rejected": "Samples rejected",
+        "samples_positive": "Samples positive",
+        "mean_turnaround_minutes": "Mean turnaround (h)",
+        "max_turnaround_minutes": "Max turnaround (h)",
+        "min_turnaround_minutes": "Min turnaround (h)",
+        "arrivals_during_warmup": "Arrivals during warm-up",
+        "completions_during_warmup": "Completions during warm-up",
+    }
+    _IN_HOURS = {"mean_turnaround_minutes", "max_turnaround_minutes", "min_turnaround_minutes"}
+
+    def _value(key: str, x: float) -> str:
+        x = x / 60.0 if key in _IN_HOURS else x
+        return f"{x:.1f}"
+
+    rows = []
+    for key, m in aggregate["metrics"].items():
+        label = _LABELS.get(key, key)
+        rows.append(
+            f"<tr><td>{label}</td><td>{_value(key, m['mean'])}</td>"
+            f"<td>[{_value(key, m['ci_low'])}, {_value(key, m['ci_high'])}]</td></tr>"
+        )
+    return (
+        "<table><thead><tr><th>Metric</th><th>Mean</th>"
+        "<th>95% interval</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def _stage_time_table(config: SimulationConfig) -> str:
     rows = []
     for p in stage_time_params(config):
@@ -318,12 +353,29 @@ def render_html_report(
     stats: StatsCollector,
     config: SimulationConfig,
     output_path: str = "diagnostics/v2/summary_report.html",
+    replication_summary: dict | None = None,
 ) -> str:
     """Renders arrival counts, turnaround times, and average per-phase
-    durations, each broken down by sample type, to a standalone HTML file."""
+    durations, each broken down by sample type, to a standalone HTML file.
+
+    If `replication_summary` (lab_sim.v2.replications.aggregate_replications's
+    output) is given, an extra "Replication analysis" section is inserted
+    showing the mean and empirical 95% interval of each overall summary
+    metric across those independent replications - a discrete-event-
+    simulation replication interval, not a Bayesian credible interval, since
+    there's no posterior here, just repeated independent runs.
+    """
 
     summary = build_summary(stats, config)
     overall = stats.summary()
+
+    replication_section = ""
+    if replication_summary is not None:
+        replication_section = f"""
+  <h2>Replication analysis</h2>
+  <p class="subtitle" style="margin-top:-4px;">{replication_summary['n_replications']} independent replications of this config, varying only random_seed. The interval is the empirical 2.5th-97.5th percentile across replications, not a Bayesian credible interval.</p>
+  <div class="table-scroll">{_replication_table(replication_summary)}</div>
+"""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -382,7 +434,7 @@ def render_html_report(
     <div><div class="label">Rejected</div><div class="value">{overall['samples_rejected']}</div></div>
     <div><div class="label">Mean turnaround</div><div class="value">{overall['mean_turnaround_minutes'] / 60:.1f} h</div></div>
   </div>
-
+{replication_section}
   <h2>Samples by specimen type</h2>
   <p class="subtitle" style="margin-top:-4px;">Arrived and Completed are independent cohorts - a sample can complete in the observation window without having arrived in it (it arrived during warm-up), or vice versa (it's still mid-pipeline at run end).</p>
   <div class="table-scroll">{_counts_table(summary)}</div>

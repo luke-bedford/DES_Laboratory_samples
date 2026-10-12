@@ -82,24 +82,53 @@ clipped to a configurable range) and a gender (weighted categorical draw). These
 positivity — see below — per Background/v2/Microbiology Context's note that patient age and
 gender "influence sample positivity rate."
 
-**The journey** (`lab_sim/v2/processes.py`) is a strict sequence of resource requests, with
-every service duration drawn from `random.gauss(mean, stdev)` and floored at 0.1 minutes:
+**The journey** (`lab_sim/v2/processes.py`) is a sequence of resource requests, with
+every service duration drawn from `random.gauss(mean, stdev)` and floored at 0.1
+minutes. Reception and accessioning (one HSSW, ~3 min sd 1 + ~4 min sd 1.5) are shared
+by every sample type; what happens next depends on the type:
 
-1. **Reception, accessioning, plating** — one HSSW holds all three steps back to back,
-   ~3 min (sd 1) + ~4 min (sd 1.5) + ~6 min (sd 2).
-2. **Primary incubation** — a blood-culture incubator slot for blood cultures, a plate
-   incubator slot for everything else, ~18 hours (sd 2h). This single stage dominates
-   total turnaround time.
-3. **Reading** — a BMS, ~5 min (sd 2). This is also the moment `is_culture_positive` is
-   resolved, as a Bernoulli draw against that sample type's `positive_probability`
+1. **Urine** goes through an automated-cell-counter gate straight after accessioning
+   (~5 min, sd 1.5): per Background/v2/Microbiology Context, a sample with a WCC count
+   over 100 is cultured, and so is any sample from a patient under the pediatric
+   exemption threshold (`urine_pediatric_exemption_age_threshold`, 12 years) regardless
+   of WCC — modelled as a Bernoulli draw against the brief's calibrated ~63.9% pass rate
+   (`urine_culture_criteria_probability`) for everyone else. The brief's other
+   exemptions (pregnancy, certain clinical areas) have no supporting patient data and so
+   are folded into that calibrated rate rather than modelled separately. A sample that
+   doesn't meet criteria is discarded here — `StatsCollector.record_rejection` — and
+   never reaches plating.
+2. **Blood culture** skips plating entirely at this point: the bottle itself is loaded
+   straight onto the dedicated blood-culture incubator for up to 5 days
+   (`blood_culture_max_incubation_minutes`). Whether it *flags* is a Bernoulli draw
+   against that sample type's `positive_probability` (adjusted by patient gender/age,
+   same as every other type's positivity), with the time to flag drawn from
+   `blood_culture_time_to_flag` — an unvalidated placeholder, since the brief specifies
+   no distribution for it. A bottle that never flags within 5 days is reported negative
+   without ever being plated. One that flags gets a BMS gram stain (~10 min, sd 3), is
+   then plated by an HSSW (~6 min, sd 2) with **direct** susceptibility testing set up
+   alongside it (HSSW + identification analyzer, ~20 min sd 5), and goes into the
+   general plate incubator for its own ~18-hour (sd 2h) incubation — during which a
+   separate, non-blocking process resolves a 4-hours-in identification attempt
+   (`blood_culture_identification_delay_minutes`, `identification_success_probability`)
+   onto `Sample.identification_successful`, purely informational and organism-independent
+   for now, per the brief's "can be modelled later." A BMS then reads the primary plate
+   (positivity/organism are already known from the flag) and susceptibility testing is
+   *repeated* from that plate — the same setup → sensitivity-incubation → sensitivity-
+   reading cycle as step 4 below.
+3. **Every other sample type** (and urine samples that passed the cell-counter gate) is
+   plated by an HSSW (~6 min, sd 2) and goes into the general plate incubator for ~18
+   hours (sd 2h) — this single stage dominates total turnaround time for non-blood-culture
+   types. A BMS then reads the plate (~5 min, sd 2), which resolves `is_culture_positive`
+   as a Bernoulli draw against that sample type's `positive_probability`
    (`SampleTypeProfile`, `lab_sim/v2/config.py`), adjusted by the patient's gender and age
-   (elderly/young multipliers). If positive, an `Organism` is drawn from that sample
+   (elderly/young multipliers); if positive, an `Organism` is drawn from that sample
    type's `organism_weights`.
-4. **If positive only** — an HSSW sets up susceptibility testing on an identification
-   analyzer (~20 min, sd 5; both resources held together), a plate-incubator slot request
-   for sensitivity incubation (~16 hours, sd 2h; always the plate pool, even for a blood
-   culture subculture), then a BMS reads the susceptibilities (~8 min, sd 3). Positive
-   samples therefore take roughly double the incubation time of negative ones.
+4. **If positive** (any type) — an HSSW sets up susceptibility testing on an
+   identification analyzer (~20 min, sd 5; both resources held together), a
+   plate-incubator slot request for sensitivity incubation (~16 hours, sd 2h; always the
+   plate pool, even for a blood culture subculture), then a BMS reads the
+   susceptibilities (~8 min, sd 3). Positive samples therefore take roughly double the
+   incubation time of negative ones.
 5. **Result entry** — a BMS enters the result onto the LIS, ~4 min (sd 1.5).
 6. **Verification** — a clinical microbiologist verifies and signs off the result on the
    system, ~5 min (sd 2), after which the sample is marked `reported` and handed to
@@ -113,15 +142,19 @@ each patient's gender are categorical draws, patient age is a clipped Gaussian, 
 positivity is a per-sample-type Bernoulli trial modulated by patient gender/age, with the
 resulting organism (if positive) a per-sample-type categorical draw. All of it lives in
 `SimulationConfig` / `SampleTypeProfile` (`lab_sim/v2/config.py`) rather than scattered
-through the process/arrival code. Nothing currently rejects or reneges — there's no queue
-capacity ceiling — so a `rejected_samples` bucket exists in `StatsCollector` but is always
-empty at present.
+through the process/arrival code. The only rejection path is urine's cell-counting gate
+(see "The journey" above) — `StatsCollector.record_rejection` / `rejected_samples`;
+every other sample type always proceeds to completion, there's no queue capacity
+ceiling elsewhere.
 
 **Warm-up period** (`lab_sim/v2/stats.py`, `lab_sim/v2/simulation.py`). Starting the clock from an
 empty lab and recording from `t=0` isn't representative of a real snapshot, where queues,
 incubators, and staff are already mid-flow. `run_simulation` therefore runs the clock for
-`config.warmup_minutes + config.sim_duration_minutes` in total (3 days + 3 days by default),
-but samples arriving or completing during the first `warmup_minutes` are simulated exactly
+`config.warmup_minutes + config.sim_duration_minutes` in total (3 days warm-up + 7 days
+observation by default — the observation window was widened from 3 to 7 days so that
+blood cultures, which can incubate for up to 5 days before being reported negative, have
+room to actually complete within it), but samples arriving or completing during the
+first `warmup_minutes` are simulated exactly
 like any other — they occupy staff and incubator capacity, so the backlog genuinely builds
 up — while being excluded from the numbers everyone actually reads.
 `StatsCollector` records every arrival and completion regardless of when it happened, and
@@ -135,19 +168,21 @@ visible rather than silently discarded.
 
 **Emergent behavior at the current (v2) defaults**: with v1's specimen-type expansion and
 scaled-up capacity (7,230 plate slots, 7 HSSW, 4 BMS, 2 clinical microbiologists), unchanged
-in v2, a 3-day warm-up followed by a 3-day observation window (seed 42) sees roughly 2,690
-samples arrive — close to v1's ~2,700 (same weekly volume, just redistributed within each
-day by v2's hour-of-day rates) and about 4x v0's ~690 — but only around 56% of them (v1: 57%;
-v0: ~99%) complete within the 3-day window, and mean turnaround among those that do is ~58
-hours (v1: ~58h; v0: ~24h). This is a genuine finding, not a bug: capacity was scaled by the
-same ~38-45% factor as v1's added volume (see `SimulationConfig`'s Staffing comment), but
-queueing delay is nonlinear in utilization, and a 3-day window is barely 2-4x the ~18-34 hour
-minimum pipeline latency to begin with, so a bigger, busier system leaves proportionally more
-arrivals still mid-pipeline at the window's end - v2's hour-of-day redistribution didn't
-meaningfully change this picture, which is itself informative: at this capacity the queue is
-driven more by weekly volume and pipeline latency than by how arrivals cluster within a day.
-Positive-culture completions (285 in the seed-42 run) show up across every sample type,
-including the newly-added ones. `diagnostics/v2/distribution_checks.png` shows the NHPP's
+in v2, a 3-day warm-up followed by the current 7-day observation window (seed 42) sees
+roughly 6,450 samples arrive, but only around 50% of them complete within the window, and
+mean turnaround among those that do is ~85 hours (max ~170h, min ~36h). This is driven
+mostly by the blood-culture pathway added alongside the window widening: a bottle that never
+flags incubates for the full 5-day cap before being reported, which on its own is a
+substantial fraction of the 7-day window, so even generously widening the window from 3 to 7
+days didn't bring completion much above the old (pre-blood-culture-pathway, 3-day-window)
+~56% figure — queueing delay elsewhere is still nonlinear in utilization on top of that,
+same as the finding v1 and v2's capacity scaling originally produced. 168 urine samples were
+rejected at the cell-counting gate in this run - consistent with the brief's ~63.9% pass
+rate. Positive-culture completions (542 in the seed-42 run) show up across every sample
+type, including the newly-added ones. Run `python -m lab_sim.v2` (100 replications by
+default) for a mean + 95% interval on these figures rather than a single seed's point
+estimate - see `diagnostics/v2/summary_report.html`'s "Replication analysis" section.
+`diagnostics/v2/distribution_checks.png` shows the NHPP's
 effect directly: the flat Poisson overlay (now just the week-average rate, see
 `lab_sim/v2/plotting.py`) visibly diverges from bucketed arrival counts on particularly busy
 or quiet weekdays, which is expected now that arrivals are genuinely NHPP rather than
@@ -269,6 +304,17 @@ pip install -r requirements.txt
 python main.py
 python analyze_real_data.py
 ```
+
+`python main.py` (equivalently `python -m lab_sim.v2`) accepts `--replications N`
+(default **100**) — after the usual single run and its plots/report, it runs `N`
+further independent replications (same config, `random_seed` incremented each time via
+`lab_sim/v2/replications.py`) and adds a "Replication analysis" section to
+`diagnostics/v2/summary_report.html` with the mean and an empirical 95% interval
+(2.5th-97.5th percentile across replications - a discrete-event-simulation replication
+interval, not a Bayesian credible interval) for each overall summary metric. The
+default of 100 replications over the 10-day-per-run (3-day warm-up + 7-day observation)
+model takes correspondingly long to run; pass `--replications 1` to skip it entirely
+for fast iteration.
 
 Run tests with:
 

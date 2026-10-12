@@ -35,6 +35,35 @@ code. See `lab_sim/__init__.py` for how to import a specific version.
   hand-transcribed as static literals into `v2/config.py`.
 - Cross-references: `lab_sim/v1/` (superseded, stays frozen and runnable via
   `python -m lab_sim.v1`).
+- **Blood culture and urine pathways** (later v2 update, landed in place rather than as a
+  new frozen version): `Background/v2/Microbiology Context` describes sample-type-specific
+  workflows for these two types that the model didn't implement - every type ran through
+  one generic pipeline. Added: a dedicated `_blood_culture_journey` (`processes.py`) with
+  up to 5-day bottle incubation, a gram stain + primary plate + direct susceptibility
+  testing sequence gated on the bottle flagging, a non-blocking 4-hours-in identification
+  attempt, and susceptibility "repeated from the primary plate"; and a urine cell-counting
+  gate (`SimulationConfig.urine_culture_criteria_probability`, calibrated from the brief's
+  ~63.9% figure) ahead of plating, which finally exercises `StatsCollector`'s previously
+  vestigial `record_rejection`/`rejected_samples`. Two brief details have no supporting
+  data and are documented simplifications rather than calibrated figures: identification
+  success is a single flat placeholder probability, not organism-dependent (the brief
+  itself says this "can be modelled later"), and the brief's pregnancy/clinical-area urine
+  exemptions are folded into the single calibrated base rate rather than modelled
+  separately (no patient attribute exists for either) - only the <12-year-old exemption is
+  modelled explicitly, reusing the existing `Patient.age` field.
+- **Observation window widened to 7 days** (later v2 update): `sim_duration_minutes`
+  increased from 3 to 7 days (`warmup_minutes` unchanged at 3 days, 10 simulated days per
+  run total). The blood-culture pathway above added a non-flagging bottle's up to-5-day
+  incubation (`blood_culture_max_incubation_minutes`) - longer than the old 3-day window,
+  so most blood cultures arriving during observation could never be counted as completed.
+- **Replication-based aggregate statistics** (same update): new `lab_sim/v2/replications.py`
+  - `run_replications` runs a config `N` times, varying only `random_seed`; `aggregate_
+  replications` computes the mean and an empirical 95% interval (2.5th/97.5th percentile
+  across replications) per overall summary metric. This is the standard discrete-event-
+  simulation "method of replications" approach to run-to-run variability, not a Bayesian
+  credible interval - there's no posterior here, just repeated independent runs. Exposed via
+  `python -m lab_sim.v2 --replications N` (default 100, `--replications 1` to skip it) and
+  rendered as a new "Replication analysis" section in `summary_report.html`.
 
 ## v1
 

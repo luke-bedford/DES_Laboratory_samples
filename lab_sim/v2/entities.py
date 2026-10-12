@@ -97,6 +97,10 @@ class Sample:
     arrival_time: float = 0.0
     is_culture_positive: bool | None = None
     organism: Organism | None = None
+    # Blood culture only: outcome of the 4-hour identification attempt made
+    # from the primary plate (see SimulationConfig.identification_success_
+    # probability) - informational, doesn't gate the rest of the journey.
+    identification_successful: bool | None = None
     timestamps: dict[str, float] = field(default_factory=dict)
 
     def mark(self, event_name: str, sim_time: float) -> None:

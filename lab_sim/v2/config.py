@@ -1143,8 +1143,12 @@ class SimulationConfig:
     # Length of the *observation* window that follows the warm-up - i.e. how
     # long stats are actually recorded for, not the total run length.
     # Overnight culture incubation alone takes ~18h, so a useful window needs
-    # to span multiple days rather than a single shift for samples to complete.
-    sim_duration_minutes: float = 3 * 24 * 60
+    # to span multiple days rather than a single shift for samples to complete -
+    # and, since the blood-culture pathway added a non-flagging bottle's up to
+    # 5-day incubation (blood_culture_max_incubation_minutes), the window needs
+    # to be comfortably longer than that too, or most blood cultures arriving
+    # during observation will never be counted as completed.
+    sim_duration_minutes: float = 7 * 24 * 60
 
     # --- Arrivals ---------------------------------------------------------
     # One profile per SampleType holds its arrival rate, positivity, and
@@ -1227,3 +1231,44 @@ class SimulationConfig:
     sensitivity_reading_time: tuple[float, float] = (8.0, 3.0)
     result_entry_time: tuple[float, float] = (4.0, 1.5)
     verification_time: tuple[float, float] = (5.0, 2.0)
+
+    # --- Blood culture pathway ----------------------------------------------
+    # Per Background/v2/Microbiology Context: blood culture bottles are
+    # loaded onto the incubator and left for up to 5 days; if either bottle
+    # flags, a gram stain, primary plate, and direct susceptibility testing
+    # follow, with identification performed 4hrs into that primary
+    # incubation (see processes.py's _blood_culture_journey). A bottle that
+    # never flags within the 5 days is reported negative without ever being
+    # plated.
+    blood_culture_max_incubation_minutes: float = 5 * 24 * 60
+    # How long a flagging bottle takes to flag, capped at the limit above.
+    # The brief gives no distribution for this - there's no real data on
+    # time-to-positivity - so this is an unvalidated placeholder, not a
+    # calibrated figure like the arrival/positivity data above.
+    blood_culture_time_to_flag: tuple[float, float] = (20 * 60, 6 * 60)
+    # "The identification is performed 4hrs into incubation" (of the primary
+    # plate, following a flag).
+    blood_culture_identification_delay_minutes: float = 4 * 60
+    # "The probability of a successful identification is dependent on the
+    # organism but can be modelled later" - until organism-specific data
+    # exists, this is a single flat placeholder applied regardless of
+    # organism, recorded on Sample.identification_successful as an
+    # informational side-event that doesn't gate the rest of the pipeline.
+    identification_success_probability: float = 0.85
+    gram_stain_time: tuple[float, float] = (10.0, 3.0)
+
+    # --- Urine culture pathway -----------------------------------------------
+    # Per Background/v2/Microbiology Context: urine samples are loaded onto
+    # an automated cell counter; samples with a WCC count of >100 are
+    # cultured, others are rejected unless the patient is pregnant, <12
+    # years of age, or from certain clinical areas. "CUH data suggests ~63.9%
+    # (SD 1.9%) of samples meet culture criteria."
+    cell_counting_time: tuple[float, float] = (5.0, 1.5)
+    # The brief's calibrated aggregate pass rate. There's no patient data to
+    # separate out the pregnancy/clinical-area exemptions the brief also
+    # mentions (no such fields exist - see gender_positivity_modifier's
+    # docstring for the same limitation elsewhere), so this single rate
+    # implicitly folds them in; only the <12 exemption below is modelled
+    # explicitly, since Patient.age already exists.
+    urine_culture_criteria_probability: float = 0.639
+    urine_pediatric_exemption_age_threshold: float = 12.0
