@@ -6,7 +6,60 @@ overrides. This is deliberate: the whole point of keeping an old version around 
 able to run *exactly* what it was, indefinitely, even after later versions change shared
 code. See `lab_sim/__init__.py` for how to import a specific version.
 
-## v2 (current)
+## v3 (current)
+
+- **Queueing-wait instrumentation**: every `resources.<x>.request()` site in `processes.py`
+  now marks a `<stage>_queue_start` timestamp immediately before the `with` block, alongside
+  the existing `<stage>_start` mark taken after `yield req` resolves. Previously that gap was
+  invisible - `<stage>_start` was only ever marked *after* acquiring the resource, so nothing
+  in `stats.py` or `report.py` could distinguish time spent queueing from time spent in
+  service. `stats.py`'s new `QUEUE_STAGES` list and `total_queue_wait_minutes(sample)` sum
+  `stage_start - stage_queue_start` across every stage a sample's timestamps show it actually
+  passed through - the same pattern `report.py`'s `_PHASES` already used for service-time
+  durations. One exception: `sample_journey`'s single HSSW request covers reception,
+  accessioning, cell counting, and (for non-blood-culture types) plating under one
+  acquisition, so that whole front end gets one combined queue wait, labelled "Reception" -
+  it is not double-counted as a separate "Plating" wait the way blood culture's own, later,
+  standalone plating acquisition is.
+- **Per-sample-type and whole-cohort queueing statistics, with replication intervals**:
+  `StatsCollector.queueing_summary()` reports each sample type's (and the whole cohort's)
+  mean total queueing wait for one run; `replications.aggregate_queueing_replications()`
+  aggregates that across N independent replications into a mean + empirical 95% interval,
+  same method as `aggregate_replications()`'s existing overall-metric intervals. A sample
+  type with zero completions in a given replication (e.g. blood culture, whose up-to-5-day
+  incubation routinely exceeds short observation windows) contributes no observation for
+  that replication - via `NaN` + `np.nanmean`/`np.nanpercentile` - rather than a `0.0`
+  placeholder that would silently bias a rare type's interval toward zero. Rendered as a new
+  "Queueing statistics" section in `summary_report.html`, right after "Replication analysis".
+- **Why queueing, specifically**: the v2 "Emergent behavior" finding (see below, and
+  `README.md`) was that turnaround blew up well past what service times alone explain -
+  e.g. observed min turnaround ~36h against an ~18h mean incubation. Until now that was an
+  inference from turnaround alone; this version measures the queueing component directly
+  instead of inferring it. Result (100 replications, current 7-day-window defaults): mean
+  total queueing wait across the whole cohort is ~57h (95% interval [53h, 61h]) against a
+  mean turnaround of ~87h (95% interval [83h, 91h]) - roughly two-thirds of turnaround is
+  queueing. Most sample types cluster in the 54-81h range; blood culture is a clear,
+  structural outlier at only ~24h, since it's the only type whose primary incubation draws
+  on the dedicated (uncontended) blood-culture incubator pool rather than the overloaded
+  staff pools, and a non-flagging bottle skips plating/susceptibility entirely - see
+  `README.md`'s "Emergent behavior" section. **This figure is window-length-dependent, not
+  a converged steady-state property**: HSSW/BMS/clinical-microbiologists are all in
+  sustained overload at these defaults (consistent with the v1 "known limitation" below), so
+  the backlog grows across the run rather than stabilizing. Doubling the window to 14 days
+  (10 replications) moves the mean queueing wait to ~92h and mean turnaround to ~124h -
+  both scale with window length, while the completed fraction barely moves. Report this
+  figure as "mean wait among samples completing within a 7-day window," not as the system's
+  steady-state queueing behavior.
+- Cross-references: `lab_sim/v2/` (superseded, stays frozen and runnable via
+  `python -m lab_sim.v2`). No arrival, capacity, or pathway parameters changed from v2 - see
+  `config.py`'s `MODEL_VERSION` docstring.
+- Out of scope so far (see also the project-wide "Out of scope so far" section below):
+  resource-level statistics (utilization, queue length over time) - this version is
+  sample-centric (per sample type and per cohort), not per resource. A natural next v3 step,
+  not done here. `analysis/` stays pinned to `lab_sim.v2` - nothing about queueing
+  instrumentation touches arrivals or calibration, so repointing it would be pure churn.
+
+## v2
 
 - **Arrivals**: adds hour-of-day to the NHPP rate, using `received_hour` - a reliable,
   directly-extracted hour field (0-23) added in a later data export. The rate is now
@@ -93,7 +146,9 @@ days, vs. ~99% for v0; mean turnaround roughly doubles, from ~24h to ~58h). This
 emergent finding from the higher, unevenly-distributed real arrival volume, not a bug -
 see `README.md`'s "Emergent behavior" section for detail. Still present in v2, at similar
 magnitude (~56% complete within 3 days, mean turnaround ~58h) - expected, since v2 doesn't
-change capacity or overall volume.
+change capacity or overall volume. v3 doesn't change capacity or volume either, so the same
+congestion persists there too - now with the queueing component of it directly measured
+(see the v3 section above) rather than only inferred from turnaround.
 
 ## v0
 
@@ -106,25 +161,28 @@ stayed placeholder values throughout v0's lifetime. Tagged `model-v0` in git.
 
 Each version's plots and HTML reports land under `diagnostics/<version>/` rather than a
 single flat `diagnostics/` folder, so running one version's outputs doesn't overwrite
-another's. `lab_sim/v2/plotting.py` and `lab_sim/v2/report.py` default their `output_path`
-arguments to `diagnostics/v2/...`, as does `analysis/` (which reports against a v2
-`SimulationConfig` - see `analysis/distribution_fits.py`'s module docstring); `lab_sim/v1/`'s
-own defaults still point at `diagnostics/v1/...`, unchanged, since v1 was current when those
-defaults were set and it's now frozen rather than edited. `lab_sim/v0/`'s own module defaults
-still point at the flat `diagnostics/...` path, unchanged, because those files are frozen
-exactly as they were at the `model-v0` tag - instead, `lab_sim/v0/__main__.py` (new tooling,
-not part of the frozen snapshot) passes `diagnostics/v0/...` explicitly on every call rather
+another's. `lab_sim/v3/plotting.py` and `lab_sim/v3/report.py` default their `output_path`
+arguments to `diagnostics/v3/...`; `analysis/` still reports against a v2 `SimulationConfig`
+and writes to `diagnostics/v2/...` (see `analysis/distribution_fits.py`'s module docstring,
+and the "Out of scope so far" section below) rather than following the current version;
+`lab_sim/v2/`'s and `lab_sim/v1/`'s own defaults still point at `diagnostics/v2/...` and
+`diagnostics/v1/...` respectively, unchanged, since each was current when those defaults
+were set and is now frozen rather than edited. `lab_sim/v0/`'s own module defaults still
+point at the flat `diagnostics/...` path, unchanged, because those files are frozen exactly
+as they were at the `model-v0` tag - instead, `lab_sim/v0/__main__.py` (new tooling, not
+part of the frozen snapshot) passes `diagnostics/v0/...` explicitly on every call rather
 than the frozen defaults being edited. See "Standalone entry points" below.
 
 ## Standalone entry points
 
-Each version can be run on its own: `python -m lab_sim.v2` (equivalently, `python main.py` at
-the repo root) runs the current model; `python -m lab_sim.v1` or `python -m lab_sim.v0` runs
-an earlier frozen snapshot. All are `lab_sim/<version>/__main__.py` - a `main()` function
-plus a `if __name__ == "__main__":` guard, so they're importable too. `lab_sim/v2/__main__.py`
-and `lab_sim/v1/__main__.py` use each version's own output defaults (`diagnostics/v2/...`,
-`diagnostics/v1/...`); `lab_sim/v0/__main__.py` passes `diagnostics/v0/...` explicitly, per
-the convention above.
+Each version can be run on its own: `python -m lab_sim.v3` (equivalently, `python main.py` at
+the repo root) runs the current model; `python -m lab_sim.v2`, `python -m lab_sim.v1`, or
+`python -m lab_sim.v0` runs an earlier frozen snapshot. All are
+`lab_sim/<version>/__main__.py` - a `main()` function plus a `if __name__ == "__main__":`
+guard, so they're importable too. `lab_sim/v3/__main__.py`, `lab_sim/v2/__main__.py`, and
+`lab_sim/v1/__main__.py` use each version's own output defaults (`diagnostics/v3/...`,
+`diagnostics/v2/...`, `diagnostics/v1/...`); `lab_sim/v0/__main__.py` passes
+`diagnostics/v0/...` explicitly, per the convention above.
 
 ## Background reference per version
 
@@ -132,8 +190,10 @@ the convention above.
 built against - split into per-version copies (originally one shared, unversioned file) so
 each can independently record what information was actually available at that version's
 design time, rather than one file being silently rewritten out from under an earlier version's
-documented assumptions. `lab_sim/v2/`'s own source comments/docstrings reference
-`Background/v2/Microbiology Context` specifically; `lab_sim/v0/` and `lab_sim/v1/` still say
+documented assumptions. `lab_sim/v3/`'s own source comments/docstrings reference
+`Background/v3/Microbiology Context` specifically (identical content to v2's copy - v3 adds
+no new clinical-pathway information, only queueing instrumentation); `lab_sim/v2/`'s own code
+references `Background/v2/Microbiology Context`; `lab_sim/v0/` and `lab_sim/v1/` still say
 the bare, unqualified "Background/Microbiology Context" in their own frozen code, since that's
 what the reference actually looked like when each was current and is not something the freeze
 policy allows retroactively "fixing."
@@ -141,6 +201,12 @@ policy allows retroactively "fixing."
 ## Out of scope so far
 
 - There is no permanent regression test for older versions - `tests/test_smoke.py` tests
-  only the current version (v2).
-- `analysis/` (the real-data comparison and distribution-fit tooling) is scoped to the
-  current version only; it does not compare across model versions.
+  only the current version (v3).
+- `analysis/` (the real-data comparison and distribution-fit tooling) still imports from
+  `lab_sim.v2` specifically, not whichever version is current - it was never repointed at
+  v3 since v3 doesn't change arrivals, calibration, or anything else `analysis/` compares
+  against (only queueing instrumentation, which has no real-data analogue to fit). It does
+  not compare across model versions either way.
+- v3's queueing statistics are sample-centric (per sample type, and for the whole cohort) -
+  there is no resource-level view yet (utilization, queue length over time per resource).
+  A natural next v3 step.

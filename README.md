@@ -6,16 +6,18 @@ testing, and reporting.
 
 **Model versions**: each model version is a complete, independent package under its own
 subfolder - `lab_sim/v0/` (the original 6-specimen-type, constant-rate-Poisson model, also
-tagged `model-v0` in git), `lab_sim/v1/` (20-specimen-type, day-of-week NHPP arrivals), and
-`lab_sim/v2/` (the current model, `lab_sim.v2.MODEL_VERSION` - adds hour-of-day to the NHPP
-rate, using a reliably-extracted `received_hour` real-data field v1 didn't have) - see the
-Arrivals section below and `lab_sim/v2/entities.py`'s `SampleType` docstring. There is no
-implicit "current" version at the top of the package; every import states its version
-explicitly (`from lab_sim.v2 import ...`). See `lab_sim/CHANGES.md` for what changed between
-versions and why. Each version is runnable standalone: `python -m lab_sim.v2` (or
-`python main.py`, equivalent) runs the current model, `python -m lab_sim.v1` /
-`python -m lab_sim.v0` run earlier frozen snapshots - each writes its own diagnostics to
-`diagnostics/<version>/`.
+tagged `model-v0` in git), `lab_sim/v1/` (20-specimen-type, day-of-week NHPP arrivals),
+`lab_sim/v2/` (adds hour-of-day to the NHPP rate, using a reliably-extracted `received_hour`
+real-data field v1 didn't have, plus dedicated blood-culture/urine pathways), and
+`lab_sim/v3/` (the current model, `lab_sim.v3.MODEL_VERSION` - adds queueing-wait
+instrumentation and per-sample-type/cohort queueing statistics on top of v2's model,
+unchanged) - see the Arrivals section below and `lab_sim/v3/entities.py`'s `SampleType`
+docstring. There is no implicit "current" version at the top of the package; every import
+states its version explicitly (`from lab_sim.v3 import ...`). See `lab_sim/CHANGES.md` for
+what changed between versions and why. Each version is runnable standalone: `python -m
+lab_sim.v3` (or `python main.py`, equivalent) runs the current model, `python -m lab_sim.v2`
+/ `python -m lab_sim.v1` / `python -m lab_sim.v0` run earlier frozen snapshots - each writes
+its own diagnostics to `diagnostics/<version>/`.
 
 ## Narrative: how the simulation behaves
 
@@ -23,19 +25,22 @@ versions and why. Each version is runnable standalone: `python -m lab_sim.v2` (o
 > entity, resource, process step, or distribution changes, so it stays a true account of
 > what `python main.py` actually does rather than what it did when first written.
 
-**Entities** (`lab_sim/v2/entities.py`). A `Sample` is generated from a unique `Patient` (id,
-`age`, `Gender`) — see Background/v2/Microbiology Context, which notes that for now each
+**Entities** (`lab_sim/v3/entities.py`). A `Sample` is generated from a unique `Patient` (id,
+`age`, `Gender`) — see Background/v3/Microbiology Context, which notes that for now each
 sample comes from its own patient. Each sample carries an id, a `SampleType` (20 members as
 of model v1 — every real specimen type with a count over 20 in the real dataset, plus an
 `OTHER` catch-all for everything rarer; see the enum's docstring), a `Priority` (`ROUTINE` or
 `URGENT`, drawn 85%/15% — currently recorded but not yet used to jump any queue), its
 patient, arrival time, a three-state `is_culture_positive` flag that starts as `None` and
 is resolved partway through the journey, an `Organism` (set only if positive), and a
-`timestamps` dict that gets a new entry every time the sample changes stage. Turnaround
-time is simply `reported - arrival_time`.
+`timestamps` dict that gets a new entry every time the sample changes stage - including,
+as of v3, a `<stage>_queue_start` entry immediately before most resource requests, so
+queueing delay (time spent waiting for a resource) can be measured separately from service
+time (time the resource is actually in use) - see `lab_sim/v3/stats.py`'s `QUEUE_STAGES`
+and `total_queue_wait_minutes`. Turnaround time is simply `reported - arrival_time`.
 
-**Resources** (`lab_sim/v2/resources.py`) model the three staff groups from
-Background/v2/Microbiology Context, plus shared equipment, as `simpy.Resource` pools — plain
+**Resources** (`lab_sim/v3/resources.py`) model the three staff groups from
+Background/v3/Microbiology Context, plus shared equipment, as `simpy.Resource` pools — plain
 FIFO queues with no priority ordering: HSSW (7) who receive/book in, accession, plate, and
 set up susceptibility testing; BMS (4) who read plates and susceptibilities and enter
 results on the LIS; clinical microbiologists (2) who verify and sign off the final report;
@@ -50,9 +55,9 @@ a subculture onto a plate, so the follow-up incubation always draws from the pla
 sample currently occupies exactly one plate-incubator slot per incubation stage
 (`config.plates_per_sample = 1`); real samples are plated onto several media types at once
 and will eventually need to consume several slots concurrently — see the comment on
-`plates_per_sample` in `lab_sim/v2/config.py`.
+`plates_per_sample` in `lab_sim/v3/config.py`.
 
-**Arrivals** (`lab_sim/v2/arrivals.py`). Each `SampleType` runs its own independent arrival
+**Arrivals** (`lab_sim/v3/arrivals.py`). Each `SampleType` runs its own independent arrival
 process, and as of model v2 that process is a **day-of-week × hour-of-day non-homogeneous
 Poisson process (NHPP)**, not a constant-rate one — the real dataset shows every specimen
 type's arrival rate depends significantly on both weekday and hour of day (see
@@ -75,20 +80,22 @@ types arrive one at a time; urine, swabs, stool, sputum, and multi-site arrive i
 multi-site's batching is a modeling choice, not a real-data finding (the real dataset has no
 episode linkage to confirm actual batch sizes), and its calibrated event rate is coupled to
 `batch_size_range` as a result. Every rate, hourly shape, batch size, and the priority split
-live in `SimulationConfig` (`lab_sim/v2/config.py`).
+live in `SimulationConfig` (`lab_sim/v3/config.py`).
 
-**Patients** (`lab_sim/v2/patients.py`). Each new sample's patient gets an age (Gaussian,
+**Patients** (`lab_sim/v3/patients.py`). Each new sample's patient gets an age (Gaussian,
 clipped to a configurable range) and a gender (weighted categorical draw). These feed into
-positivity — see below — per Background/v2/Microbiology Context's note that patient age and
+positivity — see below — per Background/v3/Microbiology Context's note that patient age and
 gender "influence sample positivity rate."
 
-**The journey** (`lab_sim/v2/processes.py`) is a sequence of resource requests, with
+**The journey** (`lab_sim/v3/processes.py`) is a sequence of resource requests, with
 every service duration drawn from `random.gauss(mean, stdev)` and floored at 0.1
-minutes. Reception and accessioning (one HSSW, ~3 min sd 1 + ~4 min sd 1.5) are shared
+minutes, each request immediately preceded by a `<stage>_queue_start` mark (v3) so the
+wait for that resource can be measured separately from the service time that follows it.
+Reception and accessioning (one HSSW, ~3 min sd 1 + ~4 min sd 1.5) are shared
 by every sample type; what happens next depends on the type:
 
 1. **Urine** goes through an automated-cell-counter gate straight after accessioning
-   (~5 min, sd 1.5): per Background/v2/Microbiology Context, a sample with a WCC count
+   (~5 min, sd 1.5): per Background/v3/Microbiology Context, a sample with a WCC count
    over 100 is cultured, and so is any sample from a patient under the pediatric
    exemption threshold (`urine_pediatric_exemption_age_threshold`, 12 years) regardless
    of WCC — modelled as a Bernoulli draw against the brief's calibrated ~63.9% pass rate
@@ -120,7 +127,7 @@ by every sample type; what happens next depends on the type:
    hours (sd 2h) — this single stage dominates total turnaround time for non-blood-culture
    types. A BMS then reads the plate (~5 min, sd 2), which resolves `is_culture_positive`
    as a Bernoulli draw against that sample type's `positive_probability`
-   (`SampleTypeProfile`, `lab_sim/v2/config.py`), adjusted by the patient's gender and age
+   (`SampleTypeProfile`, `lab_sim/v3/config.py`), adjusted by the patient's gender and age
    (elderly/young multipliers); if positive, an `Organism` is drawn from that sample
    type's `organism_weights`.
 4. **If positive** (any type) — an HSSW sets up susceptibility testing on an
@@ -141,13 +148,13 @@ priority split and
 each patient's gender are categorical draws, patient age is a clipped Gaussian, and culture
 positivity is a per-sample-type Bernoulli trial modulated by patient gender/age, with the
 resulting organism (if positive) a per-sample-type categorical draw. All of it lives in
-`SimulationConfig` / `SampleTypeProfile` (`lab_sim/v2/config.py`) rather than scattered
+`SimulationConfig` / `SampleTypeProfile` (`lab_sim/v3/config.py`) rather than scattered
 through the process/arrival code. The only rejection path is urine's cell-counting gate
 (see "The journey" above) — `StatsCollector.record_rejection` / `rejected_samples`;
 every other sample type always proceeds to completion, there's no queue capacity
 ceiling elsewhere.
 
-**Warm-up period** (`lab_sim/v2/stats.py`, `lab_sim/v2/simulation.py`). Starting the clock from an
+**Warm-up period** (`lab_sim/v3/stats.py`, `lab_sim/v3/simulation.py`). Starting the clock from an
 empty lab and recording from `t=0` isn't representative of a real snapshot, where queues,
 incubators, and staff are already mid-flow. `run_simulation` therefore runs the clock for
 `config.warmup_minutes + config.sim_duration_minutes` in total (3 days warm-up + 7 days
@@ -166,25 +173,55 @@ rather than the raw lists, so nothing needs its own warm-up logic. `stats.summar
 reports `arrivals_during_warmup` / `completions_during_warmup` so the warm-up's effect stays
 visible rather than silently discarded.
 
-**Emergent behavior at the current (v2) defaults**: with v1's specimen-type expansion and
+**Emergent behavior at the current (v3) defaults**: with v1's specimen-type expansion and
 scaled-up capacity (7,230 plate slots, 7 HSSW, 4 BMS, 2 clinical microbiologists), unchanged
-in v2, a 3-day warm-up followed by the current 7-day observation window (seed 42) sees
-roughly 6,450 samples arrive, but only around 50% of them complete within the window, and
-mean turnaround among those that do is ~85 hours (max ~170h, min ~36h). This is driven
-mostly by the blood-culture pathway added alongside the window widening: a bottle that never
-flags incubates for the full 5-day cap before being reported, which on its own is a
-substantial fraction of the 7-day window, so even generously widening the window from 3 to 7
-days didn't bring completion much above the old (pre-blood-culture-pathway, 3-day-window)
-~56% figure — queueing delay elsewhere is still nonlinear in utilization on top of that,
-same as the finding v1 and v2's capacity scaling originally produced. 168 urine samples were
-rejected at the cell-counting gate in this run - consistent with the brief's ~63.9% pass
-rate. Positive-culture completions (542 in the seed-42 run) show up across every sample
-type, including the newly-added ones. Run `python -m lab_sim.v2` (100 replications by
-default) for a mean + 95% interval on these figures rather than a single seed's point
-estimate - see `diagnostics/v2/summary_report.html`'s "Replication analysis" section.
-`diagnostics/v2/distribution_checks.png` shows the NHPP's
+in v2 and v3, a 3-day warm-up followed by the current 7-day observation window (seed 42)
+sees roughly 6,450 samples arrive, but only around 50% of them complete within the window,
+and mean turnaround among those that do is ~85 hours (max ~170h, min ~36h) - bit-for-bit
+identical to v2's seed-42 run, since v3 only adds instrumentation (timestamps), consuming no
+randomness itself. This is driven mostly by the blood-culture pathway added alongside the
+window widening in v2: a bottle that never flags incubates for the full 5-day cap before
+being reported, which on its own is a substantial fraction of the 7-day window, so even
+generously widening the window from 3 to 7 days didn't bring completion much above the old
+(pre-blood-culture-pathway, 3-day-window) ~56% figure — queueing delay elsewhere is still
+nonlinear in utilization on top of that, same as the finding v1 and v2's capacity scaling
+originally produced. 168 urine samples were rejected at the cell-counting gate in this run -
+consistent with the brief's ~63.9% pass rate. Positive-culture completions (542 in the
+seed-42 run) show up across every sample type, including the newly-added ones. v3 can now
+measure the queueing component of that turnaround directly rather than only inferring it
+from how far min/mean turnaround exceed service-time means: across 100 replications, the
+whole cohort's mean total queueing wait is ~57 hours (95% interval [53h, 61h]) against a
+mean turnaround of ~87 hours (95% interval [83h, 91h]) - i.e. roughly two-thirds of a
+sample's turnaround is spent waiting for a resource, not being processed by one (that
+*ratio* is more robust than either figure alone, since both are measured on the same
+censored set of completers - see the caveat below). Most sample types cluster in the
+54-81h range, but blood culture is a clear outlier at only ~24h (95% interval [21h, 27h])
+on ~281 completions/replication - not a thin-data artifact. That's structural: blood
+culture is the only type whose primary incubation draws on the dedicated, uncontended
+`blood_culture_incubator_slots` pool (2,200 slots) rather than the overloaded staff pools,
+and a non-flagging bottle (the large majority - see positivity above) skips the HSSW
+front-end plating work and susceptibility testing entirely, going straight from incubator
+to a single BMS read to reporting. Every other type queues for the same handful of
+overloaded HSSW/BMS/clinical-microbiologist pools at multiple stages.
+
+**Caveat - this figure is window-length-dependent, not a converged steady-state property**:
+the capacity check above (`samples_arrived`/day × mean service time > staff-minutes/day)
+already shows HSSW, BMS, and clinical microbiologists are all in sustained overload at
+these defaults - the queue backlog grows across the run rather than stabilizing (consistent
+with "the lab no longer clears its queue" in `lab_sim/CHANGES.md`'s v1 section). Doubling
+the observation window to 14 days (10 replications, same seed set) moves the whole-cohort
+mean queueing wait from ~57h to ~92h, and mean turnaround from ~87h to ~124h - both grow
+roughly in proportion to the window, while the completed fraction barely moves (~52% either
+way). So "mean queueing wait among samples that complete within the window" is a property
+of (system × window length × warm-up), not of the lab alone; the tight 95% interval at a
+fixed window length reflects every replication landing at the same point on that growth
+curve, not that the estimate has converged. Run `python -m lab_sim.v3` (100 replications by
+default) for the 7-day figures yourself rather than taking the point estimate above - see
+`diagnostics/v3/summary_report.html`'s "Replication analysis" and "Queueing statistics"
+sections.
+`diagnostics/v3/distribution_checks.png` shows the NHPP's
 effect directly: the flat Poisson overlay (now just the week-average rate, see
-`lab_sim/v2/plotting.py`) visibly diverges from bucketed arrival counts on particularly busy
+`lab_sim/v3/plotting.py`) visibly diverges from bucketed arrival counts on particularly busy
 or quiet weekdays, which is expected now that arrivals are genuinely NHPP rather than
 constant-rate. With 20 sample types the plot is a wide 2×20 grid, and its shared per-row
 y-axis flattens sparse types (e.g. `OTHER`) next to high-volume ones (e.g. `SWAB`) — a known,
@@ -192,40 +229,54 @@ accepted limitation, not redesigned as part of the v1 or v2 changes.
 
 ## Structure
 
-- `lab_sim/v2/config.py` — **the parameter file.** Every simulation parameter lives here:
+- `lab_sim/v3/config.py` — **the parameter file.** Every simulation parameter lives here:
   the warm-up and observation window lengths, arrival rates/hourly shape and batch sizes,
   patient age/gender distributions, staffing levels, process time distributions, and each
-  sample type's positivity/organism profile (`SampleTypeProfile`, including v2's new
+  sample type's positivity/organism profile (`SampleTypeProfile`, including v2's
   `hourly_fraction_of_day`). Nothing that controls simulation behavior should be hardcoded
-  anywhere else.
-- `lab_sim/v2/entities.py` — the `Sample` and `Patient` entities and the `SampleType`,
+  anywhere else. Unchanged from v2 - v3 adds queueing instrumentation and statistics, not
+  new parameters.
+- `lab_sim/v3/entities.py` — the `Sample` and `Patient` entities and the `SampleType`,
   `Priority`, `Gender`, `Organism` enums.
-- `lab_sim/v2/resources.py` — shared SimPy resources (HSSW, BMS, clinical microbiologists,
+- `lab_sim/v3/resources.py` — shared SimPy resources (HSSW, BMS, clinical microbiologists,
   the blood-culture and plate incubator pools, identification analyzers).
-- `lab_sim/v2/patients.py` — draws a new patient's age and gender.
-- `lab_sim/v2/arrivals.py` — one independent day-of-week × hour-of-day NHPP arrival process
+- `lab_sim/v3/patients.py` — draws a new patient's age and gender.
+- `lab_sim/v3/arrivals.py` — one independent day-of-week × hour-of-day NHPP arrival process
   per sample type (Lewis-Shedler thinning against the factorized rate
   `SampleTypeProfile.arrivals_per_day_by_weekday[weekday] *
   SampleTypeProfile.hourly_fraction_of_day[hour]`); spawns batches for batched types.
-- `lab_sim/v2/processes.py` — the sample's journey through each lab stage, including
-  positivity and organism resolution.
-- `lab_sim/v2/stats.py` — collects every sample's timestamps (warm-up included) and exposes
+- `lab_sim/v3/processes.py` — the sample's journey through each lab stage, including
+  positivity and organism resolution. Every `resources.<x>.request()` site marks a
+  `<stage>_queue_start` timestamp immediately before the request (v3), so the wait for
+  that resource can be measured separately from the service time that follows it.
+- `lab_sim/v3/stats.py` — collects every sample's timestamps (warm-up included) and exposes
   `observed_arrivals()`/`observed_completions()`, which filter to the post-warm-up
   observation window; `summary()` reports turnaround times and organism counts from those.
-- `lab_sim/v2/plotting.py` — renders the arrival-count and turnaround-time diagnostic plots,
-  faceted by sample type, to `diagnostics/v2/distribution_checks.png`; also renders
-  `diagnostics/v2/stage_time_distributions.png`, one small panel per process stage plotting the
+  `QUEUE_STAGES` and `total_queue_wait_minutes` (v3) sum a sample's queueing delay across
+  every stage it passed through; `queueing_summary()` breaks that down by sample type and
+  for the whole cohort, for a single run.
+- `lab_sim/v3/replications.py` — runs a config `N` times varying only `random_seed`
+  (`run_replications`) and aggregates the resulting `StatsCollector.summary()` dicts into a
+  mean + empirical 95% interval per overall metric (`aggregate_replications`) and, as of v3,
+  per sample type and for the whole cohort for queueing wait specifically
+  (`aggregate_queueing_replications` - NaN-safe, so a sample type with zero completions in a
+  given replication doesn't bias that type's interval toward zero).
+- `lab_sim/v3/plotting.py` — renders the arrival-count and turnaround-time diagnostic plots,
+  faceted by sample type, to `diagnostics/v3/distribution_checks.png`; also renders
+  `diagnostics/v3/stage_time_distributions.png`, one small panel per process stage plotting the
   Gaussian PDF each stage's duration is actually drawn from (`SimulationConfig`'s `(mean,
   stdev)` pairs, floored at 0.1 minutes).
-- `lab_sim/v2/report.py` — renders a standalone HTML summary to `diagnostics/v2/summary_report.html`:
+- `lab_sim/v3/report.py` — renders a standalone HTML summary to `diagnostics/v3/summary_report.html`:
   arrival/completion counts and turnaround times and average per-phase durations by sample
   type, turnaround time and average per-phase durations compared between culture-positive
-  and culture-negative samples, and patient demographics (gender split, age summary, and
-  age bands against the positivity-modifier thresholds); an appendix at the end documents and
+  and culture-negative samples, patient demographics (gender split, age summary, and
+  age bands against the positivity-modifier thresholds), and (v3, when replications were run)
+  a "Queueing statistics" section with the mean queueing wait + 95% interval per sample type
+  and for the whole cohort; an appendix at the end documents and
   plots the per-stage service-time parameters behind every phase-duration figure above (the
   simulation's own assumptions - not fitted to anything, kept separate from `analysis/`'s
   real-data comparison since the real export has no per-stage timestamps to fit against).
-- `lab_sim/v2/simulation.py` — wires everything together and runs the simulation clock for
+- `lab_sim/v3/simulation.py` — wires everything together and runs the simulation clock for
   `warmup_minutes + sim_duration_minutes`.
 - `main.py` — entry point that runs a default simulation, prints a report, and writes the
   diagnostic plot and HTML summary.
@@ -305,13 +356,14 @@ python main.py
 python analyze_real_data.py
 ```
 
-`python main.py` (equivalently `python -m lab_sim.v2`) accepts `--replications N`
+`python main.py` (equivalently `python -m lab_sim.v3`) accepts `--replications N`
 (default **100**) — after the usual single run and its plots/report, it runs `N`
 further independent replications (same config, `random_seed` incremented each time via
-`lab_sim/v2/replications.py`) and adds a "Replication analysis" section to
-`diagnostics/v2/summary_report.html` with the mean and an empirical 95% interval
-(2.5th-97.5th percentile across replications - a discrete-event-simulation replication
-interval, not a Bayesian credible interval) for each overall summary metric. The
+`lab_sim/v3/replications.py`) and adds "Replication analysis" and "Queueing statistics"
+sections to `diagnostics/v3/summary_report.html` with the mean and an empirical 95%
+interval (2.5th-97.5th percentile across replications - a discrete-event-simulation
+replication interval, not a Bayesian credible interval) for each overall summary metric,
+and for queueing wait specifically, per sample type and for the whole cohort. The
 default of 100 replications over the 10-day-per-run (3-day warm-up + 7-day observation)
 model takes correspondingly long to run; pass `--replications 1` to skip it entirely
 for fast iteration.
